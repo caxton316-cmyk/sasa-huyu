@@ -99,7 +99,7 @@ const AppLoader: React.FC<AppLoaderProps> = ({ onLoadingComplete, duration = 120
 
                         <div className='smart-loader__welcome'>
                             <div className='smart-loader__welcome-line'>
-                                Welcome to <span className='smart-loader__welcome-accent'>D-Botspace</span>
+                                Welcome to <span className='smart-loader__welcome-accent'>MAKOTI TRADERS</span>
                             </div>
                             <div className='smart-loader__welcome-sub'>Automated Precision Trading System</div>
                         </div>
@@ -159,7 +159,7 @@ const AppLoader: React.FC<AppLoaderProps> = ({ onLoadingComplete, duration = 120
                     </div>
 
                     <div className='smart-loader__footer'>
-                        © 2025 D-Botspace Powered by Deriv. All rights reserved.
+                        © 2025 MAKOTI TRADERS Powered by Deriv. All rights reserved.
                     </div>
                 </div>
             </div>
