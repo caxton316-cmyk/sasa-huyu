@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { observer } from 'mobx-react-lite';
 import { useStore } from '@/hooks/useStore';
 import { api_base } from '@/external/bot-skeleton';
@@ -9,50 +9,74 @@ const OverUnder = observer(() => {
     const [digitStats, setDigitStats] = useState(Array(10).fill(0));
     const [lastDigit, setLastDigit] = useState<number | null>(null);
     const [isAutoRunning, setIsAutoRunning] = useState(false);
-    const [settings, setSettings] = useState({
-        stake: 1,
-        entryDigit: 7,
-        isTurbo: false,
-    });
+    
+    // Trading Settings
+    const [stake, setStake] = useState(1);
+    const [entryDigit, setEntryDigit] = useState(7);
+    const [isTurbo, setIsTurbo] = useState(false);
+    const [selectedSymbol, setSelectedSymbol] = useState('R_100'); // Default Vol 100
 
-    // Sync with market and update professional stats
+    // List of Volatility Indices (Matching Deriv's internal IDs)
+    const volatilityIndices = [
+        { text: 'Volatility 10 Index', value: 'R_10' },
+        { text: 'Volatility 25 Index', value: 'R_25' },
+        { text: 'Volatility 50 Index', value: 'R_50' },
+        { text: 'Volatility 75 Index', value: 'R_75' },
+        { text: 'Volatility 100 Index', value: 'R_100' },
+        { text: 'Volatility 10 (1s) Index', value: '1HZ10V' },
+        { text: 'Volatility 100 (1s) Index', value: '1HZ100V' },
+    ];
+
+    // Reset stats when changing symbol
     useEffect(() => {
+        setDigitStats(Array(10).fill(0));
+        setLastDigit(null);
+    }, [selectedSymbol]);
+
+    useEffect(() => {
+        if (!api_base?.api) return;
+
+        // Subscribe to the selected symbol
         const ticks_sub = api_base.api.onMessage().subscribe((msg: any) => {
-            if (msg.msg_type === 'tick') {
-                const digit = parseInt(msg.tick.quote.toString().slice(-1));
+            // Ensure we only process ticks for our selected symbol
+            if (msg.msg_type === 'tick' && msg.tick.symbol === selectedSymbol) {
+                const quote = msg.tick.quote.toString();
+                const digit = parseInt(quote.charAt(quote.length - 1));
+                
                 setLastDigit(digit);
+
                 setDigitStats(prev => {
                     const newStats = [...prev];
                     newStats[digit] += 1;
-                    const total = newStats.reduce((a, b) => a + b, 0);
-                    if (total > 100) { // Keep rolling window of 100
-                        const firstDigit = parseInt(msg.tick.quote.toString().slice(-1)); // Simplified for example
-                        newStats[digit] -= 0.5; 
-                    }
                     return newStats;
                 });
 
-                if (isAutoRunning && digit === settings.entryDigit) {
+                if (isAutoRunning && digit === entryDigit) {
                     executeMultiTrade();
-                    if (!settings.isTurbo) setIsAutoRunning(false);
                 }
             }
         });
-        return () => ticks_sub.unsubscribe();
-    }, [isAutoRunning, settings]);
+
+        // Request the stream for the specific symbol
+        api_base.api.send({ ticks: selectedSymbol });
+
+        return () => {
+            ticks_sub.unsubscribe();
+            api_base.api.send({ forget_all: 'ticks' }); // Clean up stream on change/unmount
+        };
+    }, [isAutoRunning, entryDigit, isTurbo, selectedSymbol]);
 
     const executeMultiTrade = async () => {
         const common_params = {
-            amount: settings.stake,
+            amount: stake,
             currency: client.currency,
-            symbol: 'R_100', // You can make this dynamic
+            symbol: selectedSymbol,
             duration: 1,
             duration_unit: 't',
         };
 
         try {
-            // Push "Pending" to Journal for professional look
-            journal.pushMessage({ message: 'Executing Multi-Trade Entry...', type: 'info' });
+            journal.pushMessage({ message: `Executing Trade on ${selectedSymbol} - Trigger: ${entryDigit}`, type: 'info' });
 
             const contracts = [
                 api_base.api.buy({ ...common_params, contract_type: 'DIGITOVER', barrier: 5 }),
@@ -61,26 +85,34 @@ const OverUnder = observer(() => {
 
             const results = await Promise.all(contracts);
             
-            // Sync results with the main Bot Results panel
             results.forEach(res => {
                 if (res.buy) {
                     summary_card.onContractStatusChange(res.buy.contract_id);
                 }
             });
-        } catch (error) {
+
+            if (!isTurbo) setIsAutoRunning(false);
+
+        } catch (error: any) {
             journal.pushMessage({ message: error.message, type: 'error' });
+            setIsAutoRunning(false);
         }
     };
+
+    const totalTicks = useMemo(() => digitStats.reduce((a, b) => a + b, 0) || 1, [digitStats]);
 
     return (
         <div className="over-under-container">
             <div className="stats-grid">
                 {digitStats.map((count, i) => {
-                    const percentage = ((count / digitStats.reduce((a, b) => a + b, 0)) * 100 || 0).toFixed(1);
+                    const percentage = ((count / totalTicks) * 100).toFixed(1);
                     return (
                         <div key={i} className={`digit-card ${lastDigit === i ? 'active' : ''}`}>
                             <span className="digit-num">{i}</span>
                             <span className="digit-percent">{percentage}%</span>
+                            <div className="digit-bar-wrapper">
+                                <div className="digit-bar-fill" style={{ height: `${percentage}%` }}></div>
+                            </div>
                         </div>
                     );
                 })}
@@ -88,22 +120,38 @@ const OverUnder = observer(() => {
 
             <div className="controls-panel">
                 <div className="input-group">
-                    <label>Stake</label>
-                    <input type="number" value={settings.stake} onChange={e => setSettings({...settings, stake: Number(e.target.value)})} />
+                    <label>Select Market</label>
+                    <select 
+                        className="market-select"
+                        value={selectedSymbol} 
+                        onChange={(e) => setSelectedSymbol(e.target.value)}
+                    >
+                        {volatilityIndices.map(index => (
+                            <option key={index.value} value={index.value}>{index.text}</option>
+                        ))}
+                    </select>
                 </div>
+
+                <div className="input-group">
+                    <label>Stake (USD)</label>
+                    <input type="number" value={stake} onChange={(e) => setStake(Number(e.target.value))} />
+                </div>
+
                 <div className="input-group">
                     <label>Entry Digit</label>
-                    <select value={settings.entryDigit} onChange={e => setSettings({...settings, entryDigit: Number(e.target.value)})}>
+                    <select value={entryDigit} onChange={(e) => setEntryDigit(Number(e.target.value))}>
                         {[0,1,2,3,4,5,6,7,8,9].map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
                 </div>
+
                 <div className="toggle-group">
-                    <button className={`btn-secondary ${settings.isTurbo ? 'on' : ''}`} onClick={() => setSettings({...settings, isTurbo: !settings.isTurbo})}>
-                        Turbo Mode: {settings.isTurbo ? 'ON' : 'OFF'}
+                    <button className={`btn-secondary ${isTurbo ? 'on' : ''}`} onClick={() => setIsTurbo(!isTurbo)}>
+                        {isTurbo ? 'Turbo: ON' : 'Turbo: OFF'}
                     </button>
                 </div>
+
                 <button className={`btn-primary ${isAutoRunning ? 'running' : ''}`} onClick={() => setIsAutoRunning(!isAutoRunning)}>
-                    {isAutoRunning ? 'STOPPING...' : 'START AUTO TRADE'}
+                    {isAutoRunning ? 'STOP BOT' : 'START AUTO TRADE'}
                 </button>
             </div>
         </div>
