@@ -20,6 +20,7 @@ const TRADE_TYPES = [
     { value: 'DIGITODD', label: 'Odd' },
     { value: 'DIGITMATCH', label: 'Matches' },
     { value: 'DIGITDIFF', label: 'Differs' },
+    { value: 'OVER_UNDER', label: 'Over/Under' },
 ];
 
 // Safe version of tradeOptionToBuy without Blockly dependencies
@@ -265,20 +266,20 @@ const SpeedBot = observer(() => {
         const trade_option: any = {
             amount: Number(stake),
             basis: 'stake',
-            contractTypes: [tradeType],
+            contractTypes: [tradeType === 'OVER_UNDER' ? (lastOutcomeWasLossRef.current ? 'DIGITUNDER' : 'DIGITOVER') : tradeType],
             currency: account_currency,
             duration: Number(ticks),
             duration_unit: 't',
             symbol,
         };
         // Choose prediction based on trade type and last outcome
-        if (tradeType === 'DIGITOVER' || tradeType === 'DIGITUNDER') {
+        if (tradeType === 'DIGITOVER' || tradeType === 'DIGITUNDER' || tradeType === 'OVER_UNDER') {
             trade_option.prediction = Number(lastOutcomeWasLossRef.current ? ouPredPostLoss : ouPredPreLoss);
         } else if (tradeType === 'DIGITMATCH' || tradeType === 'DIGITDIFF') {
             trade_option.prediction = Number(mdPrediction);
         }
 
-        const buy_req = tradeOptionToBuy(tradeType, trade_option);
+        const buy_req = tradeOptionToBuy(tradeType === 'OVER_UNDER' ? (lastOutcomeWasLossRef.current ? 'DIGITUNDER' : 'DIGITOVER') : tradeType, trade_option);
         const { buy, error } = await apiRef.current.buy(buy_req);
         if (error) throw error;
         setStatus(`Purchased: ${buy?.longcode || 'Contract'} (ID: ${buy?.contract_id})`);
@@ -308,7 +309,7 @@ const SpeedBot = observer(() => {
                 // apply effective stake to buy
                 setStake(effectiveStake.toString());
 
-                const isOU = tradeType === 'DIGITOVER' || tradeType === 'DIGITUNDER';
+                const isOU = tradeType === 'DIGITOVER' || tradeType === 'DIGITUNDER' || tradeType === 'OVER_UNDER';
                 if (isOU) {
                     lastOutcomeWasLossRef.current = lossStreak > 0;
                 }
@@ -323,7 +324,7 @@ const SpeedBot = observer(() => {
                         transaction_ids: { buy: buy?.transaction_id },
                         buy_price: buy?.buy_price,
                         currency: account_currency,
-                        contract_type: tradeType as any,
+                        contract_type: (tradeType === 'OVER_UNDER' ? (lastOutcomeWasLossRef.current ? 'DIGITUNDER' : 'DIGITOVER') : tradeType) as any,
                         underlying: symbol,
                         display_name: symbol_display,
                         date_start: Math.floor(Date.now() / 1000),
