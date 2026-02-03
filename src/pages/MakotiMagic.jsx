@@ -6,15 +6,16 @@ import { api_base } from '@/external/bot-skeleton';
 const MakotiMagic = observer(() => {
     const { client } = useStore();
     
-    const [is_hunting, setIsHunting] = useState(false);
+    const [is_flooding, setIsFlooding] = useState(false);
     const [stake, setStake] = useState(0.35);
     const [results, setResults] = useState([]);
     const [total_pl, setTotalPL] = useState(0);
-    const [is_auto_mode, setIsAutoMode] = useState(false); // NEW: Auto-Loop
 
-    const hunt_active = useRef(false);
+    // SPEED REFS: Bypassing React's state for the firing loop
+    const flood_active = useRef(false);
+    const last_processed_tick_id = useRef(null);
 
-    // RESULTS LISTENER
+    // 1. INDEPENDENT RESULT LISTENER (Runs in background)
     useEffect(() => {
         const sub = api_base.api.onMessage().subscribe((msg) => {
             const data = msg.data;
@@ -23,31 +24,21 @@ const MakotiMagic = observer(() => {
                 const profit = contract.profit;
 
                 setResults(prev => [{
-                    id: contract.contract_id,
-                    stake: contract.buy_price,
                     prediction: contract.barrier,
-                    entry: contract.entry_tick_display_value.slice(-1),
-                    exit: contract.exit_tick_display_value.slice(-1),
+                    entry: contract.entry_tick_display_value?.slice(-1) || '?',
+                    exit: contract.exit_tick_display_value?.slice(-1) || '?',
                     status: contract.status.toUpperCase(),
                     profit: profit
-                }, ...prev].slice(0, 8));
+                }, ...prev].slice(0, 15));
                 setTotalPL(prev => prev + profit);
-
-                // If in auto mode, re-arm the hunter immediately after a result
-                if (is_auto_mode) {
-                    setTimeout(() => {
-                        hunt_active.current = true;
-                        setIsHunting(true);
-                    }, 100); 
-                }
             }
         });
         return () => sub.unsubscribe();
-    }, [is_auto_mode]);
+    }, []);
 
-    const fireInstantStrike = useCallback((digit) => {
-        if (!hunt_active.current) return;
-
+    // 2. THE FLOOD ENGINE: Fires on every tick without waiting
+    const fireStreamStrike = useCallback((digit) => {
+        // High-speed injection
         api_base.api.send({
             buy: 1,
             price: Number(stake),
@@ -62,76 +53,73 @@ const MakotiMagic = observer(() => {
                 barrier: parseInt(digit) 
             }
         });
-
-        hunt_active.current = false;
-        if (!is_auto_mode) setIsHunting(false);
-    }, [stake, client.currency, is_auto_mode]);
+    }, [stake, client.currency]);
 
     useEffect(() => {
         let tick_sub;
-        if (is_hunting) {
-            hunt_active.current = true;
+        if (is_flooding) {
+            flood_active.current = true;
             tick_sub = api_base.api.onMessage().subscribe((msg) => {
-                if (hunt_active.current && msg.data.msg_type === 'tick') {
-                    const digit = msg.data.tick.quote.toString().slice(-1);
-                    fireInstantStrike(digit);
+                // We fire on every 'tick' message immediately
+                if (flood_active.current && msg.data.msg_type === 'tick') {
+                    const tick = msg.data.tick;
+                    
+                    // Ensure we don't double-fire on the exact same tick ID if the stream jitters
+                    if (last_processed_tick_id.current !== tick.id) {
+                        last_processed_tick_id.current = tick.id;
+                        const digit = tick.quote.toString().slice(-1);
+                        fireStreamStrike(digit);
+                    }
                 }
             });
+        } else {
+            flood_active.current = false;
         }
         return () => tick_sub?.unsubscribe();
-    }, [is_hunting, fireInstantStrike]);
+    }, [is_flooding, fireStreamStrike]);
 
     return (
         <div style={ui.container}>
             <div style={ui.header}>
-                <h1 style={{ color: '#0f0', letterSpacing: '2px' }}>MAKOTI AUTO-STRIKE V5</h1>
-                <div style={ui.pl}>TOTAL P/L: {total_pl.toFixed(2)}</div>
+                <h1 style={{ color: '#0f0', letterSpacing: '3px', margin: 0 }}>STREAM FLOODER v6</h1>
+                <div style={ui.pl}>PROFIT: {total_pl.toFixed(2)}</div>
             </div>
 
             <div style={ui.card}>
-                <div style={{ marginBottom: '15px' }}>
-                    <label style={{ fontSize: '12px', color: '#666' }}>STAKE AMOUNT</label><br/>
+                <div style={{ marginBottom: '20px' }}>
+                    <label style={{ fontSize: '11px', color: '#555' }}>PACKET STAKE</label><br/>
                     <input type="number" value={stake} onChange={(e) => setStake(e.target.value)} style={ui.input} />
                 </div>
                 
-                <div style={{ display: 'flex', gap: '10px' }}>
-                    <button onClick={() => setIsHunting(true)} disabled={is_hunting} style={is_hunting ? ui.btnActive : ui.btn}>
-                        {is_hunting ? "SCANNING..." : "SINGLE STRIKE"}
-                    </button>
-
-                    <button 
-                        onClick={() => {
-                            setIsAutoMode(!is_auto_mode);
-                            setIsHunting(!is_auto_mode);
-                        }} 
-                        style={{ ...ui.btn, background: is_auto_mode ? '#f00' : '#00ff88' }}
-                    >
-                        {is_auto_mode ? "STOP AUTO" : "START AUTO-LOOP"}
-                    </button>
+                <button 
+                    onClick={() => setIsFlooding(!is_flooding)} 
+                    style={{ ...ui.btn, background: is_flooding ? '#f00' : '#0f0', boxShadow: is_flooding ? '0 0 20px #f00' : 'none' }}
+                >
+                    {is_flooding ? "STOP FLOODING" : "START ULTRA-FAST FLOOD"}
+                </button>
+                <div style={{ marginTop: '10px', fontSize: '10px', color: '#333' }}>
+                    STATUS: {is_flooding ? 'SENDING PACKETS @ 1000ms/strike' : 'SYSTEM IDLE'}
                 </div>
-                <p style={{ fontSize: '10px', color: '#444', marginTop: '10px' }}>
-                    *Auto-Loop fires a packet every time a new tick gate opens.
-                </p>
             </div>
 
             <div style={ui.tableWrapper}>
                 <table style={ui.table}>
                     <thead>
-                        <tr style={{ color: '#555', fontSize: '11px' }}>
-                            <th>PREDICT</th>
+                        <tr style={{ color: '#444', fontSize: '10px', borderBottom: '1px solid #222' }}>
+                            <th>TARGET</th>
                             <th>ENTRY</th>
                             <th>EXIT</th>
                             <th>STATUS</th>
-                            <th>PROFIT</th>
+                            <th>P/L</th>
                         </tr>
                     </thead>
                     <tbody>
                         {results.map((res, i) => (
                             <tr key={i} style={{ borderBottom: '1px solid #111' }}>
-                                <td style={{ color: '#ff0' }}>{res.prediction}</td>
+                                <td style={{ color: '#0f0' }}>{res.prediction}</td>
                                 <td>{res.entry}</td>
-                                <td style={{ fontWeight: 'bold' }}>{res.exit}</td>
-                                <td style={{ color: res.status === 'WON' ? '#0f0' : '#f00' }}>{res.status}</td>
+                                <td>{res.exit}</td>
+                                <td style={{ color: res.status === 'WON' ? '#0f0' : '#f00', fontWeight: 'bold' }}>{res.status}</td>
                                 <td style={{ color: res.profit >= 0 ? '#0f0' : '#f00' }}>{res.profit.toFixed(2)}</td>
                             </tr>
                         ))}
@@ -144,14 +132,13 @@ const MakotiMagic = observer(() => {
 
 const ui = {
     container: { background: '#000', color: '#0f0', minHeight: '100vh', padding: '15px', fontFamily: 'monospace' },
-    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #333', paddingBottom: '10px' },
-    pl: { fontSize: '18px', fontWeight: 'bold' },
-    card: { background: '#050505', padding: '20px', borderRadius: '4px', textAlign: 'center', margin: '20px 0', border: '1px solid #1a1a1a' },
-    input: { background: '#000', color: '#0f0', border: '1px solid #0f0', padding: '8px', width: '80px', textAlign: 'center', marginTop: '5px' },
-    btn: { background: '#0f0', color: '#000', padding: '12px 10px', fontSize: '14px', fontWeight: 'bold', border: 'none', cursor: 'pointer', flex: 1 },
-    btnActive: { background: '#111', color: '#444', padding: '12px 10px', fontSize: '14px', border: 'none', flex: 1 },
-    tableWrapper: { background: '#050505', padding: '10px' },
-    table: { width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }
+    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #222', paddingBottom: '10px' },
+    pl: { fontSize: '20px', fontWeight: 'bold', textShadow: '0 0 5px #0f0' },
+    card: { background: '#050505', padding: '25px', borderRadius: '2px', textAlign: 'center', margin: '15px 0', border: '1px solid #111' },
+    input: { background: '#000', color: '#0f0', border: '1px solid #0f0', padding: '10px', width: '100px', textAlign: 'center', fontSize: '18px' },
+    btn: { color: '#000', padding: '20px', fontSize: '18px', fontWeight: 'bold', border: 'none', cursor: 'pointer', width: '100%', transition: '0.2s' },
+    tableWrapper: { background: '#030303', padding: '5px' },
+    table: { width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }
 };
 
 export default MakotiMagic;
