@@ -2,10 +2,14 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { observer } from 'mobx-react-lite';
 import { useStore } from '@/hooks/useStore';
 import { api_base } from '@/external/bot-skeleton';
+import { useApiBase } from '@/hooks/useApiBase';
+import { CONNECTION_STATUS } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
 import './over-under.scss';
 
 const OverUnder = observer(() => {
     const { summary_card, journal, client } = useStore();
+    const { connectionStatus } = useApiBase();
+    
     const [digitStats, setDigitStats] = useState(Array(10).fill(0));
     const [lastDigit, setLastDigit] = useState<number | null>(null);
     const [isAutoRunning, setIsAutoRunning] = useState(false);
@@ -16,7 +20,6 @@ const OverUnder = observer(() => {
     const [isTurbo, setIsTurbo] = useState(false);
     const [selectedSymbol, setSelectedSymbol] = useState('R_100');
 
-    const active_loginid = client.loginid;
     const ticks_subscription = useRef<any>(null);
 
     const volatilityIndices = [
@@ -29,23 +32,38 @@ const OverUnder = observer(() => {
         { text: 'Volatility 100 (1s) Index', value: '1HZ100V' },
     ];
 
-    // Main effect for handling account and symbol changes
+    // Effect to force WS reconnection on App ID change
     useEffect(() => {
-        // 1. Reset UI and state
-        setDigitStats(Array(10).fill(0));
-        setLastDigit(null);
-        setIsAutoRunning(false);
+        const handleStorageChange = (event: StorageEvent) => {
+            if (event.key === 'current_trading_app_id' && api_base?.api?.connection) {
+                journal.pushMessage({ message: 'App ID changed. Forcing WebSocket reconnection...', type: 'info' });
+                api_base.api.connection.close();
+            }
+        };
 
-        // 2. Unsubscribe from any existing tick stream
-        if (ticks_subscription.current) {
-            ticks_subscription.current.unsubscribe();
+        window.addEventListener('storage', handleStorageChange);
+        return () => window.removeEventListener('storage', handleStorageChange);
+    }, [journal]);
+
+    // Main effect for subscribing to ticks based on connection status and symbol
+    useEffect(() => {
+        const subscribeToTicks = () => {
+            journal.pushMessage({ message: `Subscribing to ${selectedSymbol}...`, type: 'info' });
+            // Unsubscribe from any existing stream first
+            if (ticks_subscription.current) {
+                ticks_subscription.current.unsubscribe();
+            }
             api_base.api.send({ forget_all: 'ticks' });
-        }
 
-        // 3. Re-establish WebSocket subscription
-        if (api_base?.api && active_loginid) {
-            
+            // Reset stats for the new subscription
+            setDigitStats(Array(10).fill(0));
+            setLastDigit(null);
+
             ticks_subscription.current = api_base.api.onMessage().subscribe((msg: any) => {
+                if (msg.error) {
+                    journal.pushMessage({ message: `Tick stream error: ${msg.error.message}`, type: 'error' });
+                    return;
+                }
                 if (msg.msg_type === 'tick' && msg.tick.symbol === selectedSymbol) {
                     const quote = msg.tick.quote.toString();
                     const digit = parseInt(quote.charAt(quote.length - 1));
@@ -57,46 +75,40 @@ const OverUnder = observer(() => {
                         return newStats;
                     });
 
-                    // Check for auto-running moved inside the subscription handler
                     if (isAutoRunning && digit === entryDigit) {
                         executeMultiTrade();
                     }
                 }
             });
 
-            api_base.api.send({ ticks: selectedSymbol });
+            api_base.api.send({ ticks: selectedSymbol, subscribe: 1 });
+        };
+
+        if (connectionStatus === CONNECTION_STATUS.OPENED && api_base?.api) {
+            subscribeToTicks();
+        } else {
+            journal.pushMessage({ message: 'Waiting for WebSocket connection...', type: 'info' });
         }
 
-        // 4. Cleanup on component unmount or when dependencies change
         return () => {
             if (ticks_subscription.current) {
                 ticks_subscription.current.unsubscribe();
-                api_base.api.send({ forget_all: 'ticks' });
+                if (api_base?.api?.connection?.readyState === 1) {
+                    api_base.api.send({ forget_all: 'ticks' });
+                }
             }
         };
-    }, [active_loginid, selectedSymbol]); // Dependencies: account and symbol
+    }, [connectionStatus, selectedSymbol, journal]);
 
     // Keep-alive for WebSocket
     useEffect(() => {
         const keep_alive = setInterval(() => {
-            if (api_base?.api?.connection?.readyState === 1) { // 1 is OPEN
+            if (api_base?.api?.connection?.readyState === 1) {
                 api_base.api.send({ ping: 1 });
             }
-        }, 15000); // Every 15 seconds
-
-        return () => {
-            clearInterval(keep_alive);
-        };
+        }, 15000);
+        return () => clearInterval(keep_alive);
     }, []);
-
-    // Effect for handling trade execution logic separately
-    useEffect(() => {
-        if (isAutoRunning && lastDigit === entryDigit) {
-           // The trading logic is now handled within the main subscription effect
-           // to ensure it uses the most current state values.
-        }
-    }, [isAutoRunning, lastDigit, entryDigit]);
-
 
     const executeMultiTrade = async () => {
         const common_params = {
@@ -116,11 +128,8 @@ const OverUnder = observer(() => {
             ];
 
             const results = await Promise.all(contracts);
-            
             results.forEach(res => {
-                if (res.buy) {
-                    summary_card.onContractStatusChange(res.buy.contract_id);
-                }
+                if (res.buy) summary_card.onContractStatusChange(res.buy.contract_id);
             });
 
             if (!isTurbo) setIsAutoRunning(false);
@@ -151,6 +160,12 @@ const OverUnder = observer(() => {
             </div>
 
             <div className="controls-panel">
+                 <div className="input-group">
+                    <label>Connection</label>
+                    <div className={`connection-status ${connectionStatus === CONNECTION_STATUS.OPENED ? 'connected' : 'disconnected'}`}>
+                        {connectionStatus === CONNECTION_STATUS.OPENED ? 'Connected' : 'Disconnected'}
+                    </div>
+                </div>
                 <div className="input-group">
                     <label>Volatility</label>
                     <select className="ui-select" value={selectedSymbol} onChange={(e) => setSelectedSymbol(e.target.value)}>
