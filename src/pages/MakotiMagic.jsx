@@ -7,6 +7,7 @@ const MakotiMagic = () => {
     const [results, setResults] = useState([]);
     const [total_pl, setTotalPL] = useState(0);
     const [status, setStatus] = useState('OFFLINE');
+    const [liveDigit, setLiveDigit] = useState('-');
     
     const workerRef = useRef(null);
 
@@ -33,14 +34,14 @@ const MakotiMagic = () => {
                             ws.send(JSON.stringify({ ticks: '1HZ100V', subscribe: 1 }));
                         }
 
-                        // ULTRASONIC MATCH INJECTION
+                        // THE SHOTGUN OVERLAP
                         if (active && res.msg_type === 'tick' && !isWaiting) {
                             const digit = parseInt(res.tick.quote.toString().slice(-1));
-                            isWaiting = true; 
+                            self.postMessage({ type: 'TICK', data: digit });
+                            
+                            isWaiting = true; // Lock until burst is processed
 
-                            // PRE-FLIGHT OPTIMIZATION: Send the 'buy' command with ZERO delay
-                            // We use the exact digit we just saw to catch the gate before it closes
-                            ws.send(JSON.stringify({
+                            const trade_packet = JSON.stringify({
                                 buy: 1,
                                 price: payload.stake,
                                 parameters: { 
@@ -54,10 +55,16 @@ const MakotiMagic = () => {
                                     barrier: digit 
                                 },
                                 subscribe: 1
-                            }));
+                            });
+
+                            // BURST FIRE: Sending 3 identical requests to overlap the gate
+                            ws.send(trade_packet);
+                            ws.send(trade_packet);
+                            ws.send(trade_packet);
                         }
 
                         if (res.msg_type === 'proposal_open_contract' && res.proposal_open_contract.is_sold) {
+                            // Only release the lock when the contract is sold
                             isWaiting = false; 
                             self.postMessage({ type: 'RESULT', data: res.proposal_open_contract });
                         }
@@ -77,14 +84,14 @@ const MakotiMagic = () => {
         workerRef.current.onmessage = (e) => {
             const { type, data } = e.data;
             if (type === 'STATUS') setStatus(data);
+            if (type === 'TICK') setLiveDigit(data);
             if (type === 'RESULT') {
                 setResults(prev => [{
                     id: data.contract_id,
                     target: data.barrier,
                     exit: data.exit_tick_display_value?.slice(-1) || '?',
-                    profit: data.profit,
-                    status: data.status
-                }, ...prev].slice(0, 8));
+                    profit: data.profit
+                }, ...prev].slice(0, 10));
                 setTotalPL(v => v + data.profit);
             }
         };
@@ -109,38 +116,33 @@ const MakotiMagic = () => {
     return (
         <div style={ui.page}>
             <div style={ui.card}>
-                <h1 style={ui.title}>MATCH <span style={{color:'#0f0'}}>INJECTOR</span></h1>
+                <h1 style={ui.title}>SHOTGUN <span style={{color:'#0f0'}}>V20</span></h1>
                 
+                <div style={ui.monitor}>
+                    <div style={{color:'#555', fontSize:'10px'}}>LIVE STREAM</div>
+                    <div style={{fontSize:'48px', color:'#0f0', fontWeight:'bold'}}>{liveDigit}</div>
+                </div>
+
                 <div style={ui.statsRow}>
                     <div style={{color: status === 'CONNECTED' ? '#0f0' : '#f44', fontWeight:'bold'}}>{status}</div>
                     <div style={{fontSize: '32px', color: total_pl >= 0 ? '#0f0' : '#f44'}}>${total_pl.toFixed(2)}</div>
                 </div>
 
                 <div style={ui.form}>
-                    <div style={ui.field}>
-                        <label style={ui.label}>API TOKEN</label>
-                        <input type="password" value={token} onChange={e => setToken(e.target.value)} style={ui.input} />
-                    </div>
+                    <input type="password" value={token} onChange={e => setToken(e.target.value)} style={ui.input} placeholder="API TOKEN" />
+                    <input type="number" value={stake} onChange={e => setStake(e.target.value)} style={ui.input} placeholder="STAKE ($)" />
                     
-                    <div style={ui.field}>
-                        <label style={ui.label}>STAKE ($)</label>
-                        <input type="number" value={stake} onChange={e => setStake(e.target.value)} style={ui.input} />
-                    </div>
-
                     <button onClick={handleToggle} style={is_hunting ? ui.btnStop : ui.btnStart}>
-                        {is_hunting ? 'TERMINATE' : 'INITIALIZE MATCH STRIKE'}
+                        {is_hunting ? 'ABORT' : 'FIRE BURST'}
                     </button>
                 </div>
 
                 <div style={ui.table}>
-                    <div style={ui.th}>
-                        <span>TARGET</span><span>EXIT</span><span>PROFIT</span>
-                    </div>
                     {results.map((r) => (
                         <div key={r.id} style={ui.tr}>
-                            <span style={{color:'#fff', fontWeight:'bold'}}>{r.target}</span>
-                            <span style={{color: r.target === r.exit ? '#0f0' : '#f44'}}>{r.exit}</span>
-                            <span style={{color: r.profit >= 0 ? '#0f0' : '#f44'}}>{r.profit.toFixed(2)}</span>
+                            <span>TARGET: <b>{r.target}</b></span>
+                            <span>EXIT: <b style={{color: r.target === r.exit ? '#0f0' : '#f44'}}>{r.exit}</b></span>
+                            <span style={{color: r.profit >= 0 ? '#0f0' : '#f44', fontWeight:'bold'}}>{r.profit > 0 ? 'MATCH' : 'MISS'}</span>
                         </div>
                     ))}
                 </div>
@@ -151,18 +153,16 @@ const MakotiMagic = () => {
 
 const ui = {
     page: { background: '#000', minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', fontFamily: 'monospace' },
-    card: { width: '450px', background: '#0a0a0a', padding: '30px', borderRadius: '15px', border: '1px solid #222', textAlign: 'center' },
-    title: { fontSize: '24px', color: '#fff', marginBottom: '10px', letterSpacing: '2px' },
-    statsRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px', padding: '10px', borderBottom: '1px solid #1a1a1a' },
+    card: { width: '450px', background: '#080808', padding: '30px', borderRadius: '15px', border: '1px solid #222', textAlign: 'center' },
+    title: { fontSize: '24px', color: '#fff', marginBottom: '10px' },
+    monitor: { background: '#000', padding: '15px', borderRadius: '10px', border: '1px solid #111', marginBottom: '20px' },
+    statsRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' },
     form: { display: 'flex', flexDirection: 'column', gap: '15px' },
-    field: { textAlign: 'left' },
-    label: { fontSize: '10px', color: '#555', marginBottom: '5px', display: 'block' },
-    input: { width: '100%', padding: '12px', background: '#000', border: '1px solid #333', color: '#0f0', fontSize: '18px', boxSizing: 'border-box', borderRadius: '5px' },
+    input: { width: '100%', padding: '15px', background: '#000', border: '1px solid #333', color: '#0f0', fontSize: '18px', boxSizing: 'border-box' },
     btnStart: { padding: '15px', background: '#0f0', color: '#000', border: 'none', borderRadius: '5px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer' },
     btnStop: { padding: '15px', background: '#400', color: '#f44', border: 'none', borderRadius: '5px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer' },
-    table: { marginTop: '25px' },
-    th: { display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#444', marginBottom: '10px', padding: '0 10px' },
-    tr: { display: 'flex', justifyContent: 'space-between', padding: '12px', background: '#111', borderRadius: '5px', marginBottom: '5px', color: '#fff', fontSize: '16px' }
+    table: { marginTop: '25px', maxHeight: '200px', overflowY: 'auto' },
+    tr: { display: 'flex', justifyContent: 'space-between', padding: '10px', background: '#111', marginBottom: '5px', borderRadius: '5px', color: '#fff', fontSize: '14px' }
 };
 
 export default MakotiMagic;
