@@ -35,27 +35,32 @@ const MakotiMagic = () => {
 
                         // SURGICAL INJECTION
                         if (active && res.msg_type === 'tick' && !isWaiting) {
-                            const digit = res.tick.quote.toString().slice(-1);
+                            const digit = parseInt(res.tick.quote.toString().slice(-1));
                             isWaiting = true; // LOCK THE GATE
 
-                            setTimeout(() => {
-                                if(!active) return;
-                                ws.send(JSON.stringify({
-                                    buy: 1, 
-                                    price: payload.stake,
-                                    parameters: {
-                                        amount: payload.stake,
-                                        basis: 'stake',
-                                        contract_type: 'DIGITMATCH',
-                                        currency: 'USD',
-                                        duration: 1,
-                                        duration_unit: 't',
-                                        symbol: '1HZ100V',
-                                        barrier: parseInt(digit)
-                                    },
-                                    subscribe: 1 
-                                }));
-                            }, payload.offset);
+                            const buy_req = {
+                                buy: 1, 
+                                price: payload.stake,
+                                parameters: {
+                                    amount: payload.stake,
+                                    basis: 'stake',
+                                    contract_type: 'DIGITMATCH',
+                                    currency: 'USD',
+                                    duration: 1,
+                                    duration_unit: 't',
+                                    symbol: '1HZ100V',
+                                    barrier: digit
+                                }
+                            };
+
+                            if (payload.offset > 0) {
+                                setTimeout(() => {
+                                    if(!active) return;
+                                    ws.send(JSON.stringify(buy_req));
+                                }, payload.offset);
+                            } else {
+                                ws.send(JSON.stringify(buy_req));
+                            }
                         }
 
                         // CATCH RESULT & UNLOCK
@@ -104,7 +109,7 @@ const MakotiMagic = () => {
     return (
         <div style={ui.page}>
             <div style={ui.card}>
-                <h1 style={ui.title}>FIXED STAKE <span style={{color:'#0f0'}}>V14</span></h1>
+                <h1 style={ui.title}>MAKOTIMAGIC <span style={{color:'#0f0'}}>HFT</span></h1>
                 
                 <div style={ui.statsRow}>
                     <div style={{color: status === 'CONNECTED' ? '#0f0' : '#f44', fontWeight:'bold'}}>{status}</div>
