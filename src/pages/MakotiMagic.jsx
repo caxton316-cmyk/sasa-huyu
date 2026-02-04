@@ -34,21 +34,22 @@ const MakotiMagic = () => {
                             ws.send(JSON.stringify({ ticks: '1HZ100V', subscribe: 1 }));
                         }
 
-                        // THE 10MS INJECTION
+                        // THE GATE CRASHER INJECTION
                         if (active && res.msg_type === 'tick' && !isWaiting) {
-                            const rawQuote = res.tick.quote.toString();
-                            const digit = rawQuote.charAt(rawQuote.length - 1);
+                            const q = res.tick.quote.toString();
+                            const d = q[q.length - 1]; // Fastest access
                             
-                            self.postMessage({ type: 'TICK', data: digit });
+                            self.postMessage({ type: 'TICK', data: d });
                             isWaiting = true; 
 
-                            // PRE-BUILT RAW STRING (Zero JSON.stringify overhead)
-                            const fastMatch = '{"buy":1,"price":' + payload.stake + ',"parameters":{"amount":' + payload.stake + ',"basis":"stake","contract_type":"DIGITMATCH","currency":"USD","duration":1,"duration_unit":"t","symbol":"1HZ100V","barrier":' + digit + '},"subscribe":1}';
+                            // PRE-FLIGHT STRING (Manual construction for max speed)
+                            const packet = '{"buy":1,"price":'+payload.stake+',"parameters":{"amount":'+payload.stake+',"basis":"stake","contract_type":"DIGITMATCH","currency":"USD","duration":1,"duration_unit":"t","symbol":"1HZ100V","barrier":'+d+'},"subscribe":1}';
 
-                            // TRIPLE-TAP INJECTION
-                            ws.send(fastMatch);
-                            ws.send(fastMatch);
-                            ws.send(fastMatch);
+                            // OVERLAP BURST (Saturation)
+                            ws.send(packet);
+                            ws.send(packet);
+                            ws.send(packet);
+                            ws.send(packet); // 4th packet for extra coverage
                         }
 
                         if (res.msg_type === 'proposal_open_contract' && res.proposal_open_contract.is_sold) {
@@ -78,7 +79,7 @@ const MakotiMagic = () => {
                     target: data.barrier,
                     exit: data.exit_tick_display_value?.slice(-1) || '?',
                     profit: data.profit
-                }, ...prev].slice(0, 8));
+                }, ...prev].slice(0, 10));
                 setTotalPL(v => v + data.profit);
             }
         };
@@ -103,23 +104,22 @@ const MakotiMagic = () => {
     return (
         <div style={ui.page}>
             <div style={ui.card}>
-                <h2 style={ui.title}>ULTRA <span style={{color:'#0f0'}}>INJECTOR V21</span></h2>
+                <h2 style={ui.title}>GATE-CRASHER <span style={{color:'#0f0'}}>V22</span></h2>
                 
                 <div style={ui.monitor}>
-                    <div style={{fontSize:'60px', color:'#0f0', fontWeight:'900'}}>{liveDigit}</div>
-                    <div style={{fontSize:'10px', color:'#444'}}>TICK STREAM ACTIVE</div>
+                    <div style={{fontSize:'72px', color:'#0f0', fontWeight:'900', textShadow:'0 0 20px #0f0'}}>{liveDigit}</div>
                 </div>
 
                 <div style={ui.statsRow}>
-                    <div style={{color: status === 'CONNECTED' ? '#0f0' : '#f44'}}>{status}</div>
-                    <div style={{fontSize: '30px', color: total_pl >= 0 ? '#0f0' : '#f44'}}>${total_pl.toFixed(2)}</div>
+                    <div style={{color: status === 'CONNECTED' ? '#0f0' : '#f44', fontWeight:'bold'}}>{status}</div>
+                    <div style={{fontSize: '32px', color: total_pl >= 0 ? '#0f0' : '#f44'}}>${total_pl.toFixed(2)}</div>
                 </div>
 
                 <div style={ui.form}>
                     <input type="password" value={token} onChange={e => setToken(e.target.value)} style={ui.input} placeholder="API TOKEN" />
                     <input type="number" value={stake} onChange={e => setStake(e.target.value)} style={ui.input} placeholder="STAKE ($)" />
                     <button onClick={handleToggle} style={is_hunting ? ui.btnStop : ui.btnStart}>
-                        {is_hunting ? 'STOP ENGINE' : 'ACTIVATE OVERLAP'}
+                        {is_hunting ? 'KILL SWITCH' : 'EXECUTE INJECTION'}
                     </button>
                 </div>
 
@@ -128,7 +128,7 @@ const MakotiMagic = () => {
                         <div key={r.id} style={ui.tr}>
                             <span>TARGET: <b>{r.target}</b></span>
                             <span style={{color: r.target === r.exit ? '#0f0' : '#f44'}}>EXIT: <b>{r.exit}</b></span>
-                            <span>{r.profit > 0 ? '🏆' : '❌'}</span>
+                            <span style={{fontWeight:'bold'}}>{r.profit > 0 ? '🏆 WIN' : '❌'}</span>
                         </div>
                     ))}
                 </div>
@@ -139,16 +139,16 @@ const MakotiMagic = () => {
 
 const ui = {
     page: { background: '#000', minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', fontFamily: 'monospace' },
-    card: { width: '400px', background: '#080808', padding: '40px', borderRadius: '20px', border: '2px solid #111', textAlign: 'center' },
-    title: { fontSize: '22px', color: '#fff', marginBottom: '15px' },
-    monitor: { background: '#000', padding: '20px', borderRadius: '15px', border: '1px solid #1a1a1a', marginBottom: '25px' },
+    card: { width: '420px', background: '#0a0a0a', padding: '30px', borderRadius: '15px', border: '1px solid #333', textAlign: 'center' },
+    title: { fontSize: '20px', color: '#fff', marginBottom: '15px', letterSpacing: '3px' },
+    monitor: { background: '#000', padding: '10px', borderRadius: '10px', border: '1px solid #0f0', marginBottom: '25px' },
     statsRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
     form: { display: 'flex', flexDirection: 'column', gap: '10px' },
     input: { width: '100%', padding: '15px', background: '#000', border: '1px solid #222', color: '#0f0', fontSize: '18px', boxSizing: 'border-box' },
     btnStart: { padding: '18px', background: '#0f0', color: '#000', border: 'none', fontWeight: '900', fontSize: '18px', cursor: 'pointer' },
-    btnStop: { padding: '18px', background: '#300', color: '#f44', border: 'none', fontWeight: '900', fontSize: '18px', cursor: 'pointer' },
-    table: { marginTop: '20px' },
-    tr: { display: 'flex', justifyContent: 'space-between', padding: '12px', background: '#0c0c0c', marginBottom: '5px', borderRadius: '8px', borderLeft: '4px solid #1a1a1a', color: '#eee' }
+    btnStop: { padding: '18px', background: '#400', color: '#f44', border: 'none', fontWeight: '900', fontSize: '18px', cursor: 'pointer' },
+    table: { marginTop: '20px', fontSize: '14px' },
+    tr: { display: 'flex', justifyContent: 'space-between', padding: '12px', background: '#111', marginBottom: '5px', borderRadius: '5px', color: '#fff' }
 };
 
 export default MakotiMagic;
