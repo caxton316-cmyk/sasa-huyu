@@ -23,11 +23,22 @@ const OverUnder = observer(() => {
     const [tickHistory, setTickHistory] = useState<number[]>([]);
     const [lastDigit, setLastDigit] = useState<number | null>(null);
     const [isAutoRunning, setIsAutoRunning] = useState(false);
-    
+    const isAutoRunningRef = useRef(isAutoRunning);
+    isAutoRunningRef.current = isAutoRunning;
+
     // Settings
     const [stake, setStake] = useState(1);
+    const stakeRef = useRef(stake);
+    stakeRef.current = stake;
+
     const [entryDigit, setEntryDigit] = useState(7);
+    const entryDigitRef = useRef(entryDigit);
+    entryDigitRef.current = entryDigit;
+
     const [isTurbo, setIsTurbo] = useState(false);
+    const isTurboRef = useRef(isTurbo);
+    isTurboRef.current = isTurbo;
+    
     const [selectedSymbol, setSelectedSymbol] = useState('R_100');
 
     const volatilityIndices = [
@@ -54,18 +65,18 @@ const OverUnder = observer(() => {
             addLog('WS not open for subscribe');
             return;
         }
-        
+
         addLog(`Fetching history & subscribing: ${symbol}`);
         ws.current.send(JSON.stringify({ forget_all: 'ticks' }));
-        
-        ws.current.send(JSON.stringify({ 
-            ticks_history: symbol, 
+
+        ws.current.send(JSON.stringify({
+            ticks_history: symbol,
             count: MAX_TICKS,
             end: 'latest',
             style: 'ticks',
-            subscribe: 1 
+            subscribe: 1
         }));
-        
+
         setTickHistory([]);
         setLastDigit(null);
     };
@@ -83,10 +94,10 @@ const OverUnder = observer(() => {
         addLog('Connecting...');
         setConnectionStatus(STATUS_CONNECTING);
         isAuthorized.current = false;
-        
+
         const app_id = localStorage.getItem('config.app_id') || '117164';
         const server_url = localStorage.getItem('config.server_url') || 'ws.derivws.com';
-        
+
         try {
             ws.current = new WebSocket(`wss://${server_url}/websockets/v3?app_id=${app_id}`);
 
@@ -95,10 +106,10 @@ const OverUnder = observer(() => {
                 setConnectionStatus(STATUS_LIVE);
                 subscribeToTicks(selectedSymbol);
 
-                const token = localStorage.getItem('authToken') || 
-                              localStorage.getItem('token') || 
+                const token = localStorage.getItem('authToken') ||
+                              localStorage.getItem('token') ||
                               JSON.parse(localStorage.getItem('accountsList') || '{}')[client.loginid];
-                
+
                 if (token) {
                     addLog('Authorizing with token...');
                     ws.current?.send(JSON.stringify({ authorize: token }));
@@ -118,7 +129,7 @@ const OverUnder = observer(() => {
                          addLog(`Error Received: ${data.error.message} (Code: ${data.error.code})`);
                          return;
                     }
-                    
+
                     if (data.msg_type === 'authorize') {
                         addLog('Authorization Successful!');
                         isAuthorized.current = true;
@@ -130,7 +141,7 @@ const OverUnder = observer(() => {
                         const contract_id = buy_data.contract_id;
                         addLog(`Purchase Successful: ${contract_id}`);
                         journal.pushMessage(`Purchase Successful: ${contract_id}`, 'success');
-                        
+
                         transactions.pushTransaction(buy_data);
 
                         ws.current?.send(JSON.stringify({
@@ -142,13 +153,13 @@ const OverUnder = observer(() => {
 
                     if (data.msg_type === 'proposal_open_contract') {
                         const contract = data.proposal_open_contract;
-                        
+
                         transactions.pushTransaction(contract);
 
                         if (summary_card?.onBotContractEvent) {
                             summary_card.onBotContractEvent(contract);
                         }
-                        
+
                         if (contract.is_sold) {
                             const profit = contract.profit;
                             const result = profit >= 0 ? 'WON' : 'LOST';
@@ -170,11 +181,11 @@ const OverUnder = observer(() => {
                     if (data.msg_type === 'tick') {
                         const quote = data.tick.quote;
                         const digit = parseInt(quote.toString().slice(-1), 10);
-                        
+
                         setLastDigit(digit);
                         setTickHistory(prev => [...prev.slice(-MAX_TICKS + 1), digit]);
 
-                        if (isAutoRunning && digit === Number(entryDigit)) {
+                        if (isAutoRunningRef.current && digit === Number(entryDigitRef.current)) {
                             addLog(`Trigger Hit: Last digit is ${digit}`);
                             executeMultiTrade();
                         }
@@ -217,7 +228,7 @@ const OverUnder = observer(() => {
             addLog('Cannot trade: WS not open.');
             return;
         }
-        
+
         if (!isAuthorized.current) {
             addLog('Cannot trade: Not authorized. Please log in.');
             journal.pushMessage('⚠️ Login required to trade.', 'error');
@@ -225,16 +236,16 @@ const OverUnder = observer(() => {
             return;
         }
 
-        if (Number(stake) <= 0) {
-            addLog(`Cannot trade: Invalid stake of ${stake}.`);
+        const tradeAmount = Number(stakeRef.current);
+        if (tradeAmount <= 0) {
+            addLog(`Cannot trade: Invalid stake of ${tradeAmount}.`);
             journal.pushMessage('⚠️ Stake must be a positive number.', 'error');
             setIsAutoRunning(false);
             return;
         }
 
         const currency = client.currency || 'USD';
-        const tradeAmount = Number(stake);
-        
+
         const baseParameters = {
             amount: tradeAmount,
             basis: 'stake',
@@ -255,14 +266,14 @@ const OverUnder = observer(() => {
         };
 
         addLog(`Executing trades: Over 5, Under 4. Stake: ${tradeAmount} ${currency}`);
-        
+
         addLog(`Sending Trade 1: ${JSON.stringify(trade1_params)}`);
         ws.current.send(JSON.stringify(trade1_params));
 
         addLog(`Sending Trade 2: ${JSON.stringify(trade2_params)}`);
         ws.current.send(JSON.stringify(trade2_params));
-        
-        if (!isTurbo) {
+
+        if (!isTurboRef.current) {
             setIsAutoRunning(false);
             addLog('Auto-run stopped (Turbo OFF).');
         }
@@ -297,7 +308,7 @@ const OverUnder = observer(() => {
             default: return 'disconnected';
         }
     };
-    
+
     const handleStartStop = () => {
         if (!isAutoRunning && !isAuthorized.current) {
             addLog("Please log in to start the tool.");
@@ -366,7 +377,7 @@ const OverUnder = observer(() => {
                     </button>
                 </div>
             </div>
-            
+
             <div className="debug-monitor">
                 <div className="debug-header">
                     <span>REAL-TIME MONITOR</span>
