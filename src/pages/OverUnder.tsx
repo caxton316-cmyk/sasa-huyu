@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { observer } from 'mobx-react-lite';
 import { useStore } from '@/hooks/useStore';
+import { LogTypes } from '@/external/bot-skeleton';
 import './over-under.scss';
 
 // Connection Statuses
@@ -140,8 +141,7 @@ const OverUnder = observer(() => {
                         const buy_data = data.buy;
                         const contract_id = buy_data.contract_id;
                         addLog(`Purchase Successful: ${contract_id}`);
-                        journal.pushMessage(`Purchase Successful: ${contract_id}`, 'success');
-
+                        
                         transactions.pushTransaction(buy_data);
 
                         ws.current?.send(JSON.stringify({
@@ -153,18 +153,21 @@ const OverUnder = observer(() => {
 
                     if (data.msg_type === 'proposal_open_contract') {
                         const contract = data.proposal_open_contract;
-
+                        
                         transactions.pushTransaction(contract);
 
                         if (summary_card?.onBotContractEvent) {
                             summary_card.onBotContractEvent(contract);
                         }
-
+                        
                         if (contract.is_sold) {
                             const profit = contract.profit;
                             const result = profit >= 0 ? 'WON' : 'LOST';
                             addLog(`Trade Result: ${result} ($${profit})`);
-                            journal.pushMessage(`Trade Finished: ${result} ($${profit})`, profit >= 0 ? 'success' : 'error');
+                            journal.onLogSuccess({
+                                log_type: profit > 0 ? LogTypes.PROFIT : LogTypes.LOST,
+                                extra: { currency: client.currency, profit },
+                            });
                         }
                     }
 
@@ -181,7 +184,7 @@ const OverUnder = observer(() => {
                     if (data.msg_type === 'tick') {
                         const quote = data.tick.quote;
                         const digit = parseInt(quote.toString().slice(-1), 10);
-
+                        
                         setLastDigit(digit);
                         setTickHistory(prev => [...prev.slice(-MAX_TICKS + 1), digit]);
 
@@ -228,7 +231,7 @@ const OverUnder = observer(() => {
             addLog('Cannot trade: WS not open.');
             return;
         }
-
+        
         if (!isAuthorized.current) {
             addLog('Cannot trade: Not authorized. Please log in.');
             journal.pushMessage('⚠️ Login required to trade.', 'error');
@@ -245,7 +248,7 @@ const OverUnder = observer(() => {
         }
 
         const currency = client.currency || 'USD';
-
+        
         const baseParameters = {
             amount: tradeAmount,
             basis: 'stake',
@@ -258,23 +261,23 @@ const OverUnder = observer(() => {
         const trade1_params = {
             buy: 1,
             price: tradeAmount,
-            parameters: { ...baseParameters, contract_type: 'DIGITOVER', barrier: '5' },
+            parameters: { ...baseParameters, contract_type: 'DIGITOVER', barrier: '5' }
         };
 
         const trade2_params = {
             buy: 1,
             price: tradeAmount,
-            parameters: { ...baseParameters, contract_type: 'DIGITUNDER', barrier: '4' },
+            parameters: { ...baseParameters, contract_type: 'DIGITUNDER', barrier: '4' }
         };
 
         addLog(`Executing trades: Over 5, Under 4. Stake: ${tradeAmount} ${currency}`);
-
+        
         addLog(`Sending Trade 1: ${JSON.stringify(trade1_params)}`);
         ws.current.send(JSON.stringify(trade1_params));
 
         addLog(`Sending Trade 2: ${JSON.stringify(trade2_params)}`);
         ws.current.send(JSON.stringify(trade2_params));
-
+        
         if (!isTurboRef.current) {
             setIsAutoRunning(false);
             addLog('Auto-run stopped (Turbo OFF).');
@@ -310,7 +313,7 @@ const OverUnder = observer(() => {
             default: return 'disconnected';
         }
     };
-
+    
     const handleStartStop = () => {
         if (!isAutoRunning && !isAuthorized.current) {
             addLog("Please log in to start the tool.");
@@ -379,7 +382,7 @@ const OverUnder = observer(() => {
                     </button>
                 </div>
             </div>
-
+            
             <div className="debug-monitor">
                 <div className="debug-header">
                     <span>REAL-TIME MONITOR</span>
