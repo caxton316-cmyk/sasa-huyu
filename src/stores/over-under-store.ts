@@ -289,7 +289,7 @@ export default class OverUnderStore {
             return;
         }
 
-        const tradeAmount = Number(.stake);
+        const tradeAmount = Number(this.stake);
         if (tradeAmount <= 0) {
             this.addLog(`Cannot trade: Invalid stake of ${tradeAmount}.`);
             this.root_store.journal.pushMessage('⚠️ Stake must be a positive number.', 'error');
