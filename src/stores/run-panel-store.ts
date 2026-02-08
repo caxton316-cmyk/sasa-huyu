@@ -482,19 +482,9 @@ export default class RunPanelStore {
     };
 
     onClearStatClick = () => {
-        this.showClearStatDialog();
-    };
-
-    clearStat = () => {
-        const { summary_card, journal, transactions } = this.root_store;
-
-        this.setIsRunning(false);
-        this.setHasOpenContract(false);
-        this.clear();
+        const { journal, transactions } = this.root_store;
         journal.clear();
-        summary_card.clear();
         transactions.clear();
-        this.setContractStage(contract_stages.NOT_RUNNING);
     };
 
     toggleStatisticsInfoModal = () => {
@@ -1017,10 +1007,6 @@ export default class RunPanelStore {
         }
 
         this.dbot.interpreter.bot.getInterface().sellAtMarket();
-    };
-
-    clear = () => {
-        observer.emit('statistics.clear');
     };
 
     onBotContractEvent = (data: { is_sold?: boolean }) => {
