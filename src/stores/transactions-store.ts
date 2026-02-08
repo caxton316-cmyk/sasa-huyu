@@ -330,17 +330,24 @@ export default class TransactionsStore {
     }
 
     clear() {
-        try {
-            if (typeof window !== 'undefined' && window.sessionStorage) {
-                sessionStorage.removeItem(this.TRANSACTION_CACHE);
+        const currentLoginId = this.core?.client?.loginid;
+        if (currentLoginId) {
+            const stored_transactions = getStoredItemsByKey(this.TRANSACTION_CACHE, {});
+            delete stored_transactions[currentLoginId];
+            setStoredItemsByKey(this.TRANSACTION_CACHE, stored_transactions);
+            
+            if (isSpecialCRAccount(currentLoginId)) {
+                const demoAccountId = this.getDemoAccountId();
+                if (demoAccountId && stored_transactions[demoAccountId]) {
+                    delete stored_transactions[demoAccountId];
+                    setStoredItemsByKey(this.TRANSACTION_CACHE, stored_transactions);
+                }
             }
-            this.elements = {};
-            this.recovered_completed_transactions = [];
-            this.recovered_transactions = [];
-            this.is_transaction_details_modal_open = false;
-        } catch (error) {
-            console.warn('[Transactions] Failed to clear transactions:', error);
         }
+        this.elements = {};
+        this.recovered_completed_transactions = [];
+        this.recovered_transactions = [];
+        this.is_transaction_details_modal_open = false;
     }
 
     registerReactions() {

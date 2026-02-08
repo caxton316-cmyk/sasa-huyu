@@ -151,13 +151,26 @@ export default class JournalStore {
         console.log('[Journal] 🔍 restoreStoredJournals called');
         const client = this.core.client as RootStore['client'];
         const { loginid } = client;
-        console.log('[Journal] 🔍 Current loginid:', loginid);
+        console.log('[Journal] 🔍 Current loginid for restore:', loginid);
         this.journal_filters = getSetting('journal_filter') ?? this.filters.map(filter => filter.id);
+
+        if (!loginid) {
+            this.unfiltered_messages = [];
+            return;
+        }
+
+        const stored_journals = getStoredItemsByKey(this.JOURNAL_CACHE, {});
         
-        // On page refresh, clear all journal messages - don't restore from storage
-        // This ensures a fresh start after each refresh
-        this.unfiltered_messages = [];
-        console.log(`[Journal] ✅ Cleared journal messages on refresh - starting fresh`);
+        const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
+        const isSpecialCR = showAsCR === 'CR6779123';
+        let loadAccountId = loginid;
+        if (isSpecialCR && showAsCR) {
+            loadAccountId = showAsCR;
+        }
+        
+        const messages = stored_journals[loadAccountId] || [];
+        this.unfiltered_messages = messages;
+        console.log(`[Journal] ✅ Restored ${messages.length} messages for ${loadAccountId}`);
     }
 
     getServerTime() {
@@ -380,16 +393,32 @@ export default class JournalStore {
         const client = this.core.client as RootStore['client'];
         const { loginid } = client;
         
-        // Clear messages for current account
         this.unfiltered_messages = [];
+
+        const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
+        const isSpecialCR = showAsCR === 'CR6779123';
         
-        // If current account is a special CR account, also clear demo account messages from storage
+        let clearAccountId = loginid;
+        if (isSpecialCR && showAsCR) {
+            clearAccountId = showAsCR;
+        }
+
+        if (clearAccountId) {
+            const stored_journals = getStoredItemsByKey(this.JOURNAL_CACHE, {});
+            delete stored_journals[clearAccountId];
+            setStoredItemsByKey(this.JOURNAL_CACHE, stored_journals);
+            console.log(`[Journal] ✅ Cleared journal messages from storage for ${clearAccountId}`);
+        }
+        
         if (isSpecialCRAccount(loginid)) {
             const demoAccountId = this.getDemoAccountId();
             if (demoAccountId) {
                 const stored_journals = getStoredItemsByKey(this.JOURNAL_CACHE, {});
-                stored_journals[demoAccountId] = [];
-                setStoredItemsByKey(this.JOURNAL_CACHE, stored_journals);
+                if (stored_journals[demoAccountId]) {
+                    delete stored_journals[demoAccountId];
+                    setStoredItemsByKey(this.JOURNAL_CACHE, stored_journals);
+                    console.log(`[Journal] ✅ Cleared journal messages from storage for demo account ${demoAccountId}`);
+                }
             }
         }
     }
