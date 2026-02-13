@@ -60,14 +60,14 @@
             }
 
             &__active {
-                background: #FF1493 !important; // Darker pink background for active tab
+                background: #A020F0 !important; // Bright purple background for active tab
+                box-shadow: 0 0 10px #A020F0, 0 0 20px #A020F0, 0 0 30px #A020F0 !important;
                 color: #ffffff !important; // White text for active tab
                 position: relative;
                 border-radius: 4px !important;
                 margin: 0 0.25rem !important;
                 padding: 0.5rem 1rem !important;
                 border: none !important;
-                box-shadow: none !important;
 
                 // active text/icon color - white
                 * {
@@ -88,7 +88,7 @@
             }
 
             &__list {
-                background: #FF69B4 !important; // Bright pink background
+                background: #BA55D3 !important; // Lighter purple background
                 justify-content: flex-start; // Start from left like friend's design
                 border-bottom: none !important; // Remove border
                 padding: 0; // Remove all padding to eliminate space
@@ -325,7 +325,7 @@
 .nav-crown {
     display: inline-block;
     margin-left: 0.4rem;
-    font-size: 1.2em;
+    font-.dc-tabs__item size: 1.2em;
     filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.6));
     vertical-align: middle; // Prevent upward movement
     background: transparent !important; // Ensure no white background
@@ -969,7 +969,7 @@
     svg {
         position: relative;
         filter: none;
-        fill: #FFB6C1 !important; // Light pink icons // Light brown icons - override any inline fill attributes
+        fill: #E6E6FA !important; // Light purple icons
 
         &::before {
             display: none;
@@ -980,14 +980,15 @@
     svg > path,
     svg > g > path,
     svg > * {
-        fill: #FFB6C1 !important; // Light pink icons // Light brown icons for all navigation items
+        fill: #E6E6FA !important; // Light purple icons
         stroke: none !important;
         filter: none !important;
     }
 
     // Active tab - lighter brown background with white text
     &.dc-tabs__active {
-        background: #FF1493 !important; // Darker pink background for active tab
+        background: #A020F0 !important; // Bright purple background for active tab
+        box-shadow: 0 0 10px #A020F0, 0 0 20px #A020F0, 0 0 30px #A020F0 !important;
         color: #ffffff !important; // White text
         font-weight: bold !important;
         font-family:
@@ -1071,7 +1072,7 @@
         svg,
         svg > path,
         svg > g > path {
-            fill: #FFB6C1 !important; // Light pink icons // Light brown icons on hover
+            fill: #E6E6FA !important; // Light purple icons on hover
             stroke: none !important;
             filter: none !important;
         }
@@ -1109,7 +1110,7 @@
     svg {
         position: relative;
         filter: none;
-        fill: #FFB6C1 !important; // Light pink icons // Light brown icons - override any inline fill attributes
+        fill: #E6E6FA !important; // Light purple icons
 
         &::before {
             display: none;
@@ -1120,7 +1121,7 @@
     svg *,
     svg > path,
     svg > g > path {
-        fill: #FFB6C1 !important; // Light pink icons // Light brown icons for all navigation items
+        fill: #E6E6FA !important; // Light purple icons
         stroke: none !important;
         filter: none !important;
     }
@@ -1129,7 +1130,8 @@
     &.dc-tabs__active {
         color: #ffffff !important;
         font-weight: bold !important;
-        background: #FF1493 !important; // Darker pink background for active tab
+        background: #A020F0 !important; // Bright purple background for active tab
+        box-shadow: 0 0 10px #A020F0, 0 0 20px #A020F0, 0 0 30px #A020F0 !important;
 
         span,
         div,
@@ -1173,14 +1175,14 @@ body.theme--dark .dc-tabs__item {
     }
 
     svg {
-        fill: #FFB6C1 !important; // Light pink icons // Light brown icons - override any inline fill attributes
+        fill: #E6E6FA !important; // Light purple icons
     }
 
     svg,
     svg *,
     svg > path,
     svg > g > path {
-        fill: #FFB6C1 !important; // Light pink icons // Light brown icons for all navigation items
+        fill: #E6E6FA !important; // Light purple icons
         stroke: none !important;
         filter: none !important;
     }
@@ -1189,7 +1191,8 @@ body.theme--dark .dc-tabs__item {
     &.dc-tabs__active {
         color: #ffffff !important;
         font-weight: bold !important;
-        background: #FF1493 !important; // Darker pink background for active tab
+        background: #A020F0 !important; // Bright purple background for active tab
+        box-shadow: 0 0 10px #A020F0, 0 0 20px #A020F0, 0 0 30px #A020F0 !important;
 
         span,
         div,
