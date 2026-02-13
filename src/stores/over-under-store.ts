@@ -301,13 +301,16 @@ export default class OverUnderStore {
                         this.last_digit = digit;
                         this.tick_history = [...this.tick_history.slice(-MAX_TICKS + 1), digit];
 
-                        if (this.is_auto_running && 
-                            this.last_last_digit === Number(this.entry_digit) && 
-                            this.last_digit === Number(this.second_entry_digit)) {
-                            // Only trigger if no active trades
-                            if (this.active_contracts.size === 0) {
-                                this.addLog(`Trigger Hit: Pattern ${this.last_last_digit}-${this.last_digit} matches ${this.entry_digit}-${this.second_entry_digit}`);
-                                this.executeMultiTrade();
+                        if (this.is_auto_running) {
+                            const match1 = (this.last_last_digit === Number(this.entry_digit) && this.last_digit === Number(this.second_entry_digit));
+                            const match2 = (this.last_last_digit === Number(this.second_entry_digit) && this.last_digit === Number(this.entry_digit));
+                            
+                            if (match1 || match2) {
+                                // Only trigger if no active trades
+                                if (this.active_contracts.size === 0) {
+                                    this.addLog(`Trigger Hit: Pattern ${this.last_last_digit}-${this.last_digit} matches ${this.entry_digit} and ${this.second_entry_digit}`);
+                                    this.executeMultiTrade();
+                                }
                             }
                         }
                     }
