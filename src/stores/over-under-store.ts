@@ -380,7 +380,7 @@ export default class OverUnderStore {
                                     if (this.is_recovery_active) {
                                         this.addLog(`Trigger Hit: Executing Recovery Trade`);
                                         this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
-                                    } else {
+                                    } else if (!this.is_manual_mode) {
                                         this.addLog(`Trigger Hit: Pattern matched`);
                                         this.executeMultiTrade();
                                     }
