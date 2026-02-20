@@ -14,6 +14,36 @@
         }
     }
 
+    .switches-row {
+        display: flex;
+        gap: 1rem;
+        width: 100%;
+        margin-top: 1rem;
+    }
+
+    .manual-config-box, .recovery-config-box {
+        background: var(--general-main-1);
+        padding: 1rem;
+        border-radius: 8px;
+        border: 1px solid var(--border-normal);
+        width: 100%;
+        margin-top: 1rem;
+
+        .input-row {
+            margin-top: 0.5rem;
+        }
+    }
+
+    .recovery-config-box {
+        border-left: 4px solid var(--brand-red-coral);
+    }
+
+    .ui-switch.mini {
+        padding: 0.1rem 0.5rem !important;
+        font-size: 0.6rem !important;
+        min-width: unset !important;
+    }
+
     .switch-group {
         display: flex;
         align-items: center;
@@ -98,12 +128,19 @@
 
     .controls-panel {
         display: flex;
-        flex-wrap: wrap;
+        flex-direction: column;
         gap: 20px;
         background: var(--general-section-1);
         padding: 24px;
         border-radius: 12px;
-        align-items: flex-end;
+        align-items: stretch;
+
+        .input-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            align-items: flex-end;
+        }
 
         .input-group {
             display: flex;
