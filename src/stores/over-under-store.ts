@@ -409,9 +409,8 @@ export default class OverUnderStore {
     processRoundResults() {
         const profits = Array.from(this.contract_results.values());
         const all_loss = profits.every(p => p < 0);
-        const any_win = profits.some(p => p > 0);
 
-        this.addLog(`Round finished. All Loss: ${all_loss}, Any Win: ${any_win}`);
+        this.addLog(`Round finished. All trades resulted in loss: ${all_loss}`);
 
         if (all_loss) {
             this.stake = Number((this.stake * this.martingale).toFixed(2));
@@ -422,9 +421,9 @@ export default class OverUnderStore {
                 this.addLog("Immediate recovery triggered (Delay OFF)");
                 this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
             }
-        } else if (any_win) {
+        } else {
             this.stake = this.initial_stake;
-            this.addLog(`Win detected. Resetting stake to ${this.initial_stake}`);
+            this.addLog(`Win or break-even detected. Resetting stake to ${this.initial_stake}`);
             this.setIsRecoveryActive(false);
             
             if (this.is_volatility_changer) {
