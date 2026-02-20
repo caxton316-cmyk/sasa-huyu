@@ -207,10 +207,6 @@ export default class OverUnderStore {
         if (this.is_auto_running) {
             this.addLog("Tool started. Waiting for trigger...");
             this.root_store.run_panel.setActiveTab('journal');
-            
-            if (this.is_manual_mode) {
-                this.executeTrade(this.manual_contract_type, this.manual_barrier);
-            }
         } else {
             this.addLog("Tool stopped by user.");
             this.setIsRecoveryActive(false);
@@ -333,7 +329,7 @@ export default class OverUnderStore {
                             });
 
                             // Check if all active trades for this round are finished
-                            const expected_count = (this.is_manual_mode || this.is_recovery_active) ? 1 : 2;
+                            const expected_count = (this.is_manual_mode || this.is_recovery_active) ? 1 : (this.use_second_trigger ? 2 : 1);
                             if (this.contract_results.size >= expected_count) {
                                 this.processRoundResults();
                             }
@@ -364,7 +360,7 @@ export default class OverUnderStore {
                         this.last_digit = digit;
                         this.tick_history = [...this.tick_history.slice(-MAX_TICKS + 1), digit];
 
-                        if (this.is_auto_running && !this.is_manual_mode) {
+                        if (this.is_auto_running) {
                             let is_triggered = false;
                             
                             if (this.use_second_trigger) {
@@ -378,7 +374,10 @@ export default class OverUnderStore {
                             if (is_triggered) {
                                 // Only trigger if no active trades
                                 if (this.active_contracts.size === 0) {
-                                    if (this.is_recovery_active) {
+                                     if (this.is_manual_mode) {
+                                        this.addLog(`Trigger Hit: Executing Manual Trade`);
+                                        this.executeTrade(this.manual_contract_type, this.manual_barrier);
+                                    } else if (this.is_recovery_active) {
                                         this.addLog(`Trigger Hit: Executing Recovery Trade`);
                                         this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
                                     } else {
