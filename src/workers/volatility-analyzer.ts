@@ -1,11 +1,12 @@
-import { expose } from 'threads/worker';
 
-const analyzeVolatility = async ({ tick_data, contract_type, barrier }) => {
+self.onmessage = (event) => {
+    const { tick_data, contract_type, barrier } = event.data;
+
     let bestVolatility = null;
     let minInstability = Infinity;
 
     const barrier_num = parseInt(barrier, 10);
-    let target_digits = [];
+    const target_digits = [];
 
     if (contract_type === 'DIGITOVER') {
         // Digits that should be stable (not appear) are below the barrier
@@ -22,32 +23,33 @@ const analyzeVolatility = async ({ tick_data, contract_type, barrier }) => {
     if (target_digits.length === 0) {
         // No digits to analyze, return a random one
         const symbols = Object.keys(tick_data);
-        return symbols[Math.floor(Math.random() * symbols.length)];
+        self.postMessage(symbols[Math.floor(Math.random() * symbols.length)]);
+        return;
     }
 
     for (const symbol in tick_data) {
-        const ticks = tick_data[symbol];
-        if (ticks.length < 50) continue;
+        if (Object.prototype.hasOwnProperty.call(tick_data, symbol)) {
+            const ticks = tick_data[symbol];
+            if (ticks.length < 50) continue;
 
-        const first_half = ticks.slice(0, 25);
-        const second_half = ticks.slice(25, 50);
+            const first_half = ticks.slice(0, 25);
+            const second_half = ticks.slice(25, 50);
 
-        const countInFirstHalf = first_half.filter(t => target_digits.includes(t)).length;
-        const countInSecondHalf = second_half.filter(t => target_digits.includes(t)).length;
+            const countInFirstHalf = first_half.filter(t => target_digits.includes(t)).length;
+            const countInSecondHalf = second_half.filter(t => target_digits.includes(t)).length;
 
-        const percentInFirstHalf = (countInFirstHalf / 25) * 100;
-        const percentInSecondHalf = (countInSecondHalf / 25) * 100;
+            const percentInFirstHalf = (countInFirstHalf / 25) * 100;
+            const percentInSecondHalf = (countInSecondHalf / 25) * 100;
 
-        // We are looking for the smallest increase, or the largest decrease, in percentage.
-        const instability_score = percentInSecondHalf - percentInFirstHalf;
+            const instability_score = percentInSecondHalf - percentInFirstHalf;
 
-        if (instability_score < minInstability) {
-            minInstability = instability_score;
-            bestVolatility = symbol;
+            if (instability_score < minInstability) {
+                minInstability = instability_score;
+                bestVolatility = symbol;
+            }
         }
     }
-
-    return bestVolatility;
+    self.postMessage(bestVolatility);
 };
 
-expose({ analyzeVolatility });
+export {};

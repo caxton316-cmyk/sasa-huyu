@@ -2,7 +2,6 @@
 import { action, makeObservable, observable } from 'mobx';
 import { LogTypes } from '@/external/bot-skeleton';
 import { TStores } from '@/types/stores.types';
-import { spawn, Worker } from 'threads';
 import RootStore from './root-store';
 
 const STATUS_OFFLINE = 'Offline';
@@ -36,7 +35,7 @@ export default class OverUnderStore {
     reconnectTimeout: NodeJS.Timeout | null = null;
     is_authorized = false;
     debug_info: string[] = [];
-    volatilityAnalyzer: any;
+    volatilityAnalyzer: Worker | null = null;
 
     connection_status = STATUS_OFFLINE;
     tick_history: number[] = [];
@@ -133,8 +132,21 @@ export default class OverUnderStore {
         this.initializeWorker();
     }
 
-    async initializeWorker() {
-        this.volatilityAnalyzer = await spawn(new Worker(new URL('../workers/volatility-analyzer.ts', import.meta.url)));
+    initializeWorker() {
+        this.volatilityAnalyzer = new Worker(new URL('../workers/volatility-analyzer.ts', import.meta.url));
+
+        this.volatilityAnalyzer.onmessage = (event) => {
+            const bestVolatility = event.data;
+            if (bestVolatility) {
+                this.addLog(`Automate: Best volatility found: ${bestVolatility}`);
+                this.setSelectedSymbol(bestVolatility);
+            } else {
+                this.addLog('Automate: Could not determine best volatility, using random.');
+                const symbols = Object.keys(pip_sizes);
+                const randomSymbol = symbols[Math.floor(Math.random() * symbols.length)];
+                this.setSelectedSymbol(randomSymbol);
+            }
+        };
     }
     
     toggleAiScanner() {
@@ -412,7 +424,7 @@ export default class OverUnderStore {
                         return;
                     }
 
-                    if (this.is_automate && data.msg_type === 'history') {
+                    if ((this.is_automate || this.is_ai_scanning) && data.msg_type === 'history') {
                         const symbol = data.echo_req.ticks_history;
                         const pip_size = pip_sizes[symbol] || 2;
                         const prices = data.history.prices;
@@ -422,44 +434,8 @@ export default class OverUnderStore {
                         });
                         this.ai_volatility_data.set(symbol, digits);
 
-                        // When all data is received, start analysis
                         if (this.ai_volatility_data.size === Object.keys(pip_sizes).length) {
-                            this.addLog('All volatility data received. Analyzing for automation...');
-                            const contract_type = this.is_recovery_active ? this.recovery_contract_type : this.manual_contract_type;
-                            const barrier = this.is_recovery_active ? this.recovery_barrier : this.manual_barrier;
-
-                            const bestVolatility = await this.volatilityAnalyzer.analyzeVolatility({
-                                tick_data: Object.fromEntries(this.ai_volatility_data.entries()),
-                                contract_type,
-                                barrier
-                            });
-
-                            if(bestVolatility){
-                                this.addLog(`Automate: Best volatility found: ${bestVolatility}`);
-                                this.setSelectedSymbol(bestVolatility);
-                            } else {
-                                this.addLog('Automate: Could not determine best volatility, using random.');
-                                const symbols = Object.keys(pip_sizes);
-                                const randomSymbol = symbols[Math.floor(Math.random() * symbols.length)];
-                                this.setSelectedSymbol(randomSymbol);
-                            }
-                        }
-                        return;
-                    }
-
-                    if (this.is_ai_scanning) {
-                        if (data.msg_type === 'history') {
-                            const symbol = data.echo_req.ticks_history;
-                            const pip_size = pip_sizes[symbol] || 2;
-                            const prices = data.history.prices;
-                            const digits = prices.map((p: string | number) => {
-                                const price_str = Number(p).toFixed(pip_size);
-                                return parseInt(price_str.slice(-1), 10);
-                            });
-                            this.ai_volatility_data.set(symbol, digits);
-
-                            // When all data is received, start analysis
-                            if (this.ai_volatility_data.size === Object.keys(pip_sizes).length) {
+                             if (this.is_ai_scanning) {
                                 this.addLog('All volatility data received. Analyzing...');
                                 const results: AiScanResult[] = [];
                                 this.ai_volatility_data.forEach((ticks, sym) => {
@@ -468,6 +444,16 @@ export default class OverUnderStore {
                                 this.ai_scan_results = results;
                                 this.is_ai_scanning = false;
                                 this.addLog('AI Scan Finished.');
+                            } else if (this.is_automate) {
+                                this.addLog('All volatility data received. Analyzing for automation...');
+                                const contract_type = this.is_recovery_active ? this.recovery_contract_type : this.manual_contract_type;
+                                const barrier = this.is_recovery_active ? this.recovery_barrier : this.manual_barrier;
+
+                                this.volatilityAnalyzer.postMessage({
+                                    tick_data: Object.fromEntries(this.ai_volatility_data.entries()),
+                                    contract_type,
+                                    barrier
+                                });
                             }
                         }
                         return;
