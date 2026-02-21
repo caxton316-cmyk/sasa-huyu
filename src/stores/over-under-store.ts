@@ -134,7 +134,7 @@ export default class OverUnderStore {
     }
 
     async initializeWorker() {
-        this.volatilityAnalyzer = await spawn(new Worker('../workers/volatility-analyzer'));
+        this.volatilityAnalyzer = await spawn(new Worker(new URL('../workers/volatility-analyzer.ts', import.meta.url)));
     }
     
     toggleAiScanner() {
