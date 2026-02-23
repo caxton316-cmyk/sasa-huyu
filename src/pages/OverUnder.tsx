@@ -30,6 +30,7 @@ const OverUnder = observer(() => {
         debug_info,
         is_analyzing_volatility,
         current_analyzing_symbol,
+        is_authorizing,
         setStake,
         setMartingale,
         setIsVolatilityChanger,
@@ -90,14 +91,18 @@ const OverUnder = observer(() => {
     ];
 
     const getStatusClassName = () => {
+        if (is_authorizing) return 'authorizing';
         switch(connection_status) {
             case 'Account Connected': return 'connected';
             case 'Live Ticks': return 'authorizing';
             default: return 'disconnected';
         }
     };
+    
+    const connectionStatusText = is_authorizing ? 'Authorizing...' : connection_status;
 
     const startButtonText = useMemo(() => {
+        if (is_authorizing) return 'AUTHORIZING...';
         if (is_auto_running) {
             if (is_analyzing_volatility) {
                 const name = volatilityIndices.find(v => v.value === current_analyzing_symbol)?.text || current_analyzing_symbol;
@@ -106,7 +111,7 @@ const OverUnder = observer(() => {
             return 'STOP';
         }
         return 'START';
-    }, [is_auto_running, is_analyzing_volatility, current_analyzing_symbol]);
+    }, [is_auto_running, is_analyzing_volatility, current_analyzing_symbol, is_authorizing]);
 
     return (
         <div className="over-under-container" style={{ height: 'calc(100vh - 15rem)', overflowY: 'auto' }}>
@@ -134,12 +139,12 @@ const OverUnder = observer(() => {
             <div className="controls-panel">
                  <div className="input-group">
                     <label>Status ({tick_history.length} ticks)</label>
-                    <div className={`connection-status ${getStatusClassName()}`}>{connection_status}</div>
+                    <div className={`connection-status ${getStatusClassName()}`}>{connectionStatusText}</div>
                 </div>
                 <div className="input-row">
                     <div className="input-group">
                         <label>Index</label>
-                        <select className="ui-select" value={selected_symbol} onChange={(e) => setSelectedSymbol(e.target.value)} disabled={is_auto_running}>
+                        <select className="ui-select" value={selected_symbol} onChange={(e) => setSelectedSymbol(e.target.value)} disabled={is_auto_running || is_authorizing}>
                             {volatilityIndices.map(idx => <option key={idx.value} value={idx.value}>{idx.text}</option>)}
                         </select>
                     </div>
@@ -147,19 +152,19 @@ const OverUnder = observer(() => {
                         <label>Trigger Digits</label>
                         <div className="entry-config-row">
                             <div className="entry-config">
-                                <input className="ui-input digit-entry" type="number" min="0" max="9" value={entry_digit} onChange={(e) => setEntryDigit(Number(e.target.value))} disabled={is_auto_running} title="First Trigger" />
+                                <input className="ui-input digit-entry" type="number" min="0" max="9" value={entry_digit} onChange={(e) => setEntryDigit(Number(e.target.value))} disabled={is_auto_running || is_authorizing} title="First Trigger" />
                                 <div className={`status-led ${over_under.last_digit === Number(entry_digit) ? 'glow' : ''}`}></div>
                             </div>
                             {use_second_trigger && (
                                 <div className="entry-config">
-                                    <input className="ui-input digit-entry" type="number" min="0" max="9" value={second_entry_digit} onChange={(e) => setSecondEntryDigit(Number(e.target.value))} disabled={is_auto_running} title="Second Trigger" />
+                                    <input className="ui-input digit-entry" type="number" min="0" max="9" value={second_entry_digit} onChange={(e) => setSecondEntryDigit(Number(e.target.value))} disabled={is_auto_running || is_authorizing} title="Second Trigger" />
                                     <div className={`status-led ${over_under.last_last_digit === Number(entry_digit) && over_under.last_digit === Number(second_entry_digit) ? 'glow' : ''}`}></div>
                                 </div>
                             )}
                             <button 
                                 className={`ui-switch mini second-trigger-btn ${use_second_trigger ? 'active' : ''}`}
                                 onClick={() => setUseSecondTrigger(!use_second_trigger)}
-                                disabled={is_auto_running}
+                                disabled={is_auto_running || is_authorizing}
                                 title="Toggle Second Trigger"
                             >
                                 2ND
@@ -170,11 +175,11 @@ const OverUnder = observer(() => {
                 <div className="input-row">
                     <div className="input-group">
                         <label>Stake</label>
-                        <input className="ui-input" type="number" value={stake} onChange={(e) => setStake(Number(e.target.value))} disabled={is_auto_running} />
+                        <input className="ui-input" type="number" value={stake} onChange={(e) => setStake(Number(e.target.value))} disabled={is_auto_running || is_authorizing} />
                     </div>
                     <div className="input-group">
                         <label>Martingale</label>
-                        <input className="ui-input" type="number" step="0.1" value={martingale} onChange={(e) => setMartingale(Number(e.target.value))} disabled={is_auto_running} />
+                        <input className="ui-input" type="number" step="0.1" value={martingale} onChange={(e) => setMartingale(Number(e.target.value))} disabled={is_auto_running || is_authorizing} />
                     </div>
                 </div>
                 <div className="input-row switches-row">
@@ -183,7 +188,7 @@ const OverUnder = observer(() => {
                         <button 
                             className={`ui-switch ${is_volatility_changer ? 'active' : ''}`} 
                             onClick={() => setIsVolatilityChanger(!is_volatility_changer)}
-                            disabled={is_auto_running}
+                            disabled={is_auto_running || is_authorizing}
                         >
                             {is_volatility_changer ? 'ON' : 'OFF'}
                         </button>
@@ -194,7 +199,7 @@ const OverUnder = observer(() => {
                             <button
                                 className={`ui-switch ${is_automate ? 'active' : ''}`}
                                 onClick={() => setIsAutomate(!is_automate)}
-                                disabled={is_auto_running}
+                                disabled={is_auto_running || is_authorizing}
                             >
                                 {is_automate ? 'ON' : 'OFF'}
                             </button>
@@ -205,7 +210,7 @@ const OverUnder = observer(() => {
                         <button 
                             className={`ui-switch ${is_manual_mode ? 'active' : ''}`} 
                             onClick={() => setIsManualMode(!is_manual_mode)}
-                            disabled={is_auto_running}
+                            disabled={is_auto_running || is_authorizing}
                         >
                             {is_manual_mode ? 'ON' : 'OFF'}
                         </button>
@@ -217,14 +222,14 @@ const OverUnder = observer(() => {
                         <div className="input-row">
                             <div className="input-group">
                                 <label>Manual Type</label>
-                                <select className="ui-select" value={manual_contract_type} onChange={(e) => setManualContractType(e.target.value)} disabled={is_auto_running}>
+                                <select className="ui-select" value={manual_contract_type} onChange={(e) => setManualContractType(e.target.value)} disabled={is_auto_running || is_authorizing}>
                                     <option value="DIGITOVER">OVER</option>
                                     <option value="DIGITUNDER">UNDER</option>
                                 </select>
                             </div>
                             <div className="input-group">
                                 <label>Barrier</label>
-                                <input className="ui-input" type="number" min="0" max="9" value={manual_barrier} onChange={(e) => setManualBarrier(e.target.value)} disabled={is_auto_running} />
+                                <input className="ui-input" type="number" min="0" max="9" value={manual_barrier} onChange={(e) => setManualBarrier(e.target.value)} disabled={is_auto_running || is_authorizing} />
                             </div>
                         </div>
                     </div>
@@ -237,30 +242,30 @@ const OverUnder = observer(() => {
                             <button 
                                 className={`ui-switch ${use_recovery_delay ? 'active' : ''}`} 
                                 onClick={() => setUseRecoveryDelay(!use_recovery_delay)}
-                                disabled={is_auto_running}
+                                disabled={is_auto_running || is_authorizing}
                             >
                                 {use_recovery_delay ? 'WAIT' : 'NOW'}
                             </button>
                         </div>
                         <div className="input-group">
                             <label>Recovery Type</label>
-                            <select className="ui-select" value={recovery_contract_type} onChange={(e) => setRecoveryContractType(e.target.value)} disabled={is_auto_running}>
+                            <select className="ui-select" value={recovery_contract_type} onChange={(e) => setRecoveryContractType(e.target.value)} disabled={is_auto_running || is_authorizing}>
                                 <option value="DIGITOVER">OVER</option>
                                 <option value="DIGITUNDER">UNDER</option>
                             </select>
                         </div>
                         <div className="input-group">
                             <label>Recovery Barrier</label>
-                            <input className="ui-input" type="number" min="0" max="9" value={recovery_barrier} onChange={(e) => setRecoveryBarrier(e.target.value)} disabled={is_auto_running} />
+                            <input className="ui-input" type="number" min="0" max="9" value={recovery_barrier} onChange={(e) => setRecoveryBarrier(e.target.value)} disabled={is_auto_running || is_authorizing} />
                         </div>
                     </div>
                 </div>
 
                 <div className="button-group">
-                    <button className={`btn-secondary ${is_turbo ? 'active' : ''}`} onClick={() => setIsTurbo(!is_turbo)} disabled={is_auto_running}>
+                    <button className={`btn-secondary ${is_turbo ? 'active' : ''}`} onClick={() => setIsTurbo(!is_turbo)} disabled={is_auto_running || is_authorizing}>
                         {is_turbo ? 'TURBO ON' : 'TURBO OFF'}
                     </button>
-                    <button className={`btn-primary ${is_auto_running ? 'running' : ''}`} onClick={handleStartStop}>
+                    <button className={`btn-primary ${is_auto_running ? 'running' : ''}`} onClick={handleStartStop} disabled={is_authorizing || (is_auto_running && is_analyzing_volatility)}>
                         {startButtonText}
                     </button>
                 </div>

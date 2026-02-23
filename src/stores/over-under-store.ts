@@ -28,6 +28,7 @@ export default class OverUnderStore {
     ws: WebSocket | null = null;
     reconnectTimeout: NodeJS.Timeout | null = null;
     is_authorized = false;
+    is_authorizing = false;
     debug_info: string[] = [];
     volatilityAnalyzer: Worker | null = null;
 
@@ -90,6 +91,7 @@ export default class OverUnderStore {
             debug_info: observable,
             is_analyzing_volatility: observable,
             current_analyzing_symbol: observable,
+            is_authorizing: observable,
             setStake: action.bound,
             setMartingale: action.bound,
             setIsVolatilityChanger: action.bound,
@@ -122,17 +124,17 @@ export default class OverUnderStore {
 
         const token = event.data?.token;
         if (token && this.ws?.readyState === WebSocket.OPEN) {
-            this.addLog('Auth token received from parent window');
+            this.addLog('Auth token received, authorizing...');
             this.ws.send(JSON.stringify({ authorize: token }));
         } else {
-            this.addLog('Parent window auth failed. Falling back to public ticks.');
+            this.addLog('Parent window auth failed. Proceeding with public ticks.');
+            this.is_authorizing = false;
             this.subscribeToTicks(this.selected_symbol);
         }
     }
 
     initializeWorker() {
         this.volatilityAnalyzer = new Worker(new URL('../workers/volatility-analyzer.ts', import.meta.url));
-
         this.volatilityAnalyzer.onmessage = (event) => {
             const { score } = event.data;
             this.addLog(`Analysis for ${this.current_analyzing_symbol}: Score ${score.toFixed(2)}`);
@@ -142,14 +144,12 @@ export default class OverUnderStore {
                 this.best_symbol = this.current_analyzing_symbol;
                 this.addLog(`New best volatility: ${this.best_symbol} (Score: ${score.toFixed(2)})`);
             }
-            
             this.processAnalysisQueue();
         };
     }
-    
+
     startVolatilityAnalysis() {
         if (!this.is_automate || this.is_analyzing_volatility) return;
-        
         this.is_analyzing_volatility = true;
         this.analysis_queue = Object.keys(pip_sizes);
         this.best_score = Infinity;
@@ -162,13 +162,8 @@ export default class OverUnderStore {
         if (this.analysis_queue.length > 0) {
             this.current_analyzing_symbol = this.analysis_queue.shift();
             if (this.current_analyzing_symbol) {
-                 this.addLog(`Analyzing: ${this.current_analyzing_symbol}`);
-                 this.ws?.send(JSON.stringify({ 
-                    ticks_history: this.current_analyzing_symbol, 
-                    count: 50, 
-                    end: 'latest', 
-                    style: 'ticks' 
-                }));
+                this.addLog(`Analyzing: ${this.current_analyzing_symbol}`);
+                this.ws?.send(JSON.stringify({ ticks_history: this.current_analyzing_symbol, count: 50, end: 'latest', style: 'ticks' }));
             }
         } else {
             this.is_analyzing_volatility = false;
@@ -178,7 +173,7 @@ export default class OverUnderStore {
                 this.setSelectedSymbol(this.best_symbol);
             } else {
                 this.addLog('Analysis complete. No suitable volatility found. Reverting to default.');
-                this.setSelectedSymbol('R_100'); 
+                this.setSelectedSymbol('R_100');
             }
         }
     }
@@ -186,77 +181,28 @@ export default class OverUnderStore {
     addLog(msg: string) {
         const timestamp = new Date().toLocaleTimeString();
         this.debug_info.unshift(`[${timestamp}] ${msg}`);
-        if (this.debug_info.length > 20) {
-            this.debug_info.pop();
-        }
+        if (this.debug_info.length > 20) this.debug_info.pop();
     }
-    
+
     clearDebug() {
         this.debug_info = [];
     }
 
-    setStake(stake: number) {
-        this.stake = stake;
-        if (!this.is_auto_running) {
-            this.initial_stake = stake;
-        }
-    }
-
-    setMartingale(value: number) {
-        this.martingale = value;
-    }
-
-    setIsVolatilityChanger(value: boolean) {
-        this.is_volatility_changer = value;
-    }
-
-    setIsAutomate(value: boolean) {
-        this.is_automate = value;
-    }
-
-    setUseSecondTrigger(value: boolean) {
-        this.use_second_trigger = value;
-    }
-
-    setIsManualMode(value: boolean) {
-        this.is_manual_mode = value;
-    }
-
-    setManualContractType(value: string) {
-        this.manual_contract_type = value;
-    }
-
-    setManualBarrier(value: string) {
-        this.manual_barrier = value;
-    }
-
-    setIsRecoveryActive(value: boolean) {
-        this.is_recovery_active = value;
-    }
-
-    setRecoveryContractType(value: string) {
-        this.recovery_contract_type = value;
-    }
-
-    setRecoveryBarrier(value: string) {
-        this.recovery_barrier = value;
-    }
-
-    setUseRecoveryDelay(value: boolean) {
-        this.use_recovery_delay = value;
-    }
-
-    setEntryDigit(digit: number) {
-        this.entry_digit = digit;
-    }
-
-    setSecondEntryDigit(digit: number) {
-        this.second_entry_digit = digit;
-    }
-
-    setIsTurbo(is_turbo: boolean) {
-        this.is_turbo = is_turbo;
-    }
+    setStake(stake: number) { this.stake = stake; if (!this.is_auto_running) this.initial_stake = stake; }
+    setMartingale(value: number) { this.martingale = value; }
+    setIsVolatilityChanger(value: boolean) { this.is_volatility_changer = value; }
+    setIsAutomate(value: boolean) { this.is_automate = value; }
+    setUseSecondTrigger(value: boolean) { this.use_second_trigger = value; }
+    setIsManualMode(value: boolean) { this.is_manual_mode = value; }
+    setManualContractType(value: string) { this.manual_contract_type = value; }
+    setManualBarrier(value: string) { this.manual_barrier = value; }
+    setIsRecoveryActive(value: boolean) { this.is_recovery_active = value; }
+    setRecoveryContractType(value: string) { this.recovery_contract_type = value; }
+    setRecoveryBarrier(value: string) { this.recovery_barrier = value; }
+    setUseRecoveryDelay(value: boolean) { this.use_recovery_delay = value; }
+    setEntryDigit(digit: number) { this.entry_digit = digit; }
+    setSecondEntryDigit(digit: number) { this.second_entry_digit = digit; }
+    setIsTurbo(is_turbo: boolean) { this.is_turbo = is_turbo; }
 
     setSelectedSymbol(symbol: string) {
         if (this.selected_symbol === symbol) return;
@@ -275,43 +221,34 @@ export default class OverUnderStore {
     }
 
     handleStartStop() {
-        if (!this.is_auto_running && !this.is_authorized) {
+        if (!this.is_authorized) {
             this.addLog("Please log in to start trading.");
             return;
         }
-
         this.setIsAutoRunning(!this.is_auto_running);
-
         if (this.is_auto_running) {
             this.initial_stake = this.stake;
             this.setIsRecoveryActive(false);
             this.addLog("Tool started. Waiting for trigger...");
-            if (this.is_automate && this.is_volatility_changer) {
-                this.startVolatilityAnalysis();
-            }
+            if (this.is_automate && this.is_volatility_changer) this.startVolatilityAnalysis();
         } else {
             this.addLog("Tool stopped by user.");
             this.setIsRecoveryActive(false);
         }
     }
-    
-    subscribeToTicks(symbol: string) {
-        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-            this.addLog('WS not open to subscribe');
-            return;
-        }
 
+    subscribeToTicks(symbol: string) {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
         if (this.active_subscription_id) {
             this.ws.send(JSON.stringify({ forget: this.active_subscription_id }));
             this.active_subscription_id = null;
         }
-
-        this.addLog(`Fetching history & subscribing to: ${symbol}`);
+        this.addLog(`Subscribing to: ${symbol}`);
         this.ws.send(JSON.stringify({ ticks_history: symbol, count: MAX_TICKS, end: 'latest', style: 'ticks', subscribe: 1 }));
         this.tick_history = [];
         this.last_digit = null;
     }
-    
+
     connectWebSocket() {
         if (this.ws) { this.ws.onclose = null; this.ws.close(); }
         if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
@@ -319,6 +256,7 @@ export default class OverUnderStore {
         this.addLog('Connecting...');
         this.connection_status = STATUS_CONNECTING;
         this.is_authorized = false;
+        this.is_authorizing = true;
 
         const app_id = '117164';
         const server_url = 'ws.derivws.com';
@@ -327,11 +265,10 @@ export default class OverUnderStore {
             this.ws = new WebSocket(`wss://${server_url}/websockets/v3?app_id=${app_id}`);
 
             this.ws.onopen = () => {
-                this.addLog('WS Opened. Checking auth...');
+                this.addLog('Connection opened. Requesting authorization...');
                 this.connection_status = STATUS_LIVE;
 
                 if (window.self !== window.top) {
-                    this.addLog('Requesting auth token from parent...');
                     window.parent.postMessage({ name: 'request_auth_token' }, '*');
                 } else {
                     try {
@@ -345,10 +282,12 @@ export default class OverUnderStore {
                                 return;
                             }
                         }
-                        this.addLog('No local auth token found. Subscribing to public ticks.');
+                        this.addLog('No local token found. Proceeding with public ticks.');
+                        this.is_authorizing = false;
                         this.subscribeToTicks(this.selected_symbol);
                     } catch (e) {
-                        this.addLog(`Local token error: ${e.message}. Subscribing to public ticks.`);
+                        this.addLog(`Local token error: ${e.message}. Proceeding with public ticks.`);
+                        this.is_authorizing = false;
                         this.subscribeToTicks(this.selected_symbol);
                     }
                 }
@@ -362,18 +301,19 @@ export default class OverUnderStore {
 
                     switch (data.msg_type) {
                         case 'history':
-                             if (data.echo_req.subscribe === 1) {
+                            if (data.echo_req.subscribe === 1) {
                                 const pip_size = pip_sizes[this.selected_symbol] || 2;
                                 const prices = data.history.prices;
                                 const digits = prices.map((p: string | number) => Number(p).toFixed(pip_size).slice(-1)).map(Number);
                                 this.tick_history = digits;
                                 if (digits.length > 0) this.last_digit = digits[digits.length - 1];
-                                this.addLog(`Loaded ${digits.length} historical ticks for ${this.selected_symbol}.`);
+                                this.addLog(`Loaded ${digits.length} historical ticks.`);
                             }
                             break;
                         case 'authorize':
+                            this.is_authorizing = false;
                             if (data.error) {
-                                this.addLog(`Authorization failed: ${data.error.message}.`);
+                                this.addLog(`Authorization Failed: ${data.error.message}.`);
                                 this.is_authorized = false;
                             } else {
                                 this.addLog('Authorization Successful!');
@@ -411,11 +351,8 @@ export default class OverUnderStore {
                             this.tick_history = [...this.tick_history.slice(-MAX_TICKS + 1), digit];
 
                             if (this.is_auto_running && !this.is_analyzing_volatility && this.active_contracts.size === 0) {
-                                let is_triggered = this.use_second_trigger ? 
-                                    (this.last_digit === this.entry_digit && this.last_last_digit === this.second_entry_digit) : 
-                                    (this.last_digit === this.entry_digit);
-
-                                if (is_triggered) {
+                                let is_triggered = this.use_second_trigger ? (this.last_digit === this.entry_digit && this.last_last_digit === this.second_entry_digit) : (this.last_digit === this.entry_digit);
+                                if (.is_triggered) {
                                     if (this.is_recovery_active) {
                                         this.addLog(`Trigger Hit: Recovery Trade`);
                                         this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
@@ -436,20 +373,22 @@ export default class OverUnderStore {
             };
 
             this.ws.onclose = () => {
-                this.addLog(`WS Closed. Reconnecting...`);
+                this.addLog(`Connection closed. Reconnecting...`);
                 this.connection_status = STATUS_OFFLINE;
+                this.is_authorizing = false;
+                this.is_authorized = false;
                 this.reconnectTimeout = setTimeout(() => this.connectWebSocket(), 5000);
             };
-            this.ws.onerror = () => this.addLog(`WS Error`);
+            this.ws.onerror = (e) => this.addLog(`Connection Error: ${e.type}`);
         } catch (e) {
-            this.addLog(`WS Init Fail: ${e.message}`);
+            this.addLog(`Connection failed to initialize: ${e.message}`);
+            this.is_authorizing = false;
         }
     }
 
     processRoundResults() {
         const all_loss = Array.from(this.contract_results.values()).every(p => p < 0);
         this.addLog(`Round finished. All trades lost: ${all_loss}`);
-
         if (all_loss) {
             this.stake = Number((this.stake * this.martingale).toFixed(2));
             this.addLog(`Martingale Applied: New stake is ${this.stake}`);
@@ -464,7 +403,6 @@ export default class OverUnderStore {
             this.setIsRecoveryActive(false);
             if (this.is_volatility_changer && this.is_automate) this.startVolatilityAnalysis();
         }
-
         this.contract_results.clear();
         if (!this.is_turbo) {
             this.setIsAutoRunning(false);
@@ -487,16 +425,11 @@ export default class OverUnderStore {
         this.ws.send(JSON.stringify({ buy: 1, price: tradeAmount, parameters: { ...baseParams, contract_type: 'DIGITOVER', barrier: '5' } }));
         this.ws.send(JSON.stringify({ buy: 1, price: tradeAmount, parameters: { ...baseParams, contract_type: 'DIGITUNDER', barrier: '4' } }));
     }
-    
+
     dispose() {
         window.removeEventListener('message', this.handleAuthResponse.bind(this));
-        if (this.ws) {
-            this.ws.onclose = null;
-            this.ws.close();
-        }
-        if (this.reconnectTimeout) {
-            clearTimeout(this.reconnectTimeout);
-        }
+        if (this.ws) { this.ws.onclose = null; this.ws.close(); }
+        if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
         this.volatilityAnalyzer?.terminate();
     }
 }
