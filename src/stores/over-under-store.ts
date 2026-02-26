@@ -130,6 +130,7 @@ export default class OverUnderStore {
             () => this.root_store.client.is_logged_in,
             (is_logged_in) => {
                 if (is_logged_in && !this.is_authorized) {
+                    this.addLog('Global login detected, reconnecting...');
                     this.connectWebSocket();
                 }
             }
@@ -141,7 +142,7 @@ export default class OverUnderStore {
 
         const token = event.data?.token;
         if (token && this.ws?.readyState === WebSocket.OPEN) {
-            this.addLog('Auth token received, authorizing...');
+            this.addLog('Auth token received from parent, authorizing...');
             this.ws.send(JSON.stringify({ authorize: token }));
         } else {
             this.addLog('Parent window auth failed. Proceeding with public ticks.');
@@ -238,11 +239,21 @@ export default class OverUnderStore {
     }
 
     handleStartStop() {
-        // Check both local and global login status
-        if (!this.is_authorized && !this.root_store.client.is_logged_in) {
-            this.addLog("Please log in to start trading.");
+        // Check internal auth, global store, and localStorage as a final fallback
+        const is_logged_in = this.is_authorized || 
+                           this.root_store.client.is_logged_in || 
+                           !!localStorage.getItem('active_loginid');
+
+        if (!is_logged_in) {
+            this.addLog("Error: Please log in to start trading.");
+            // Try to reconnect if we think we might be logged in but aren't authorized
+            if (localStorage.getItem('active_loginid')) {
+                this.addLog("Attempting to recover session...");
+                this.connectWebSocket();
+            }
             return;
         }
+
         this.setIsAutoRunning(!this.is_auto_running);
         if (this.is_auto_running) {
             this.initial_stake = this.stake;
@@ -290,22 +301,46 @@ export default class OverUnderStore {
                     window.parent.postMessage({ name: 'request_auth_token' }, '*');
                 } else {
                     try {
-                        // Check for token in multiple places
+                        // Check multiple storage keys for the token
                         const active_loginid = localStorage.getItem('active_loginid');
-                        const client_accounts_str = active_loginid ? localStorage.getItem('client.accounts') : null;
-                        if (client_accounts_str) {
+                        
+                        // 1. Try client.accounts (standard)
+                        const client_accounts_str = localStorage.getItem('client.accounts');
+                        if (client_accounts_str && active_loginid) {
                             const client_accounts = JSON.parse(client_accounts_str);
                             const token = client_accounts[active_loginid]?.token;
                             if (token) {
+                                this.addLog(`Authorizing with token for ${active_loginid}...`);
                                 this.ws?.send(JSON.stringify({ authorize: token }));
                                 return;
                             }
                         }
-                        this.addLog('No local token found. Proceeding with public ticks.');
+
+                        // 2. Try accountsList (fallback)
+                        const accountsListStr = localStorage.getItem('accountsList');
+                        if (accountsListStr && active_loginid) {
+                            const accountsList = JSON.parse(accountsListStr);
+                            const token = accountsList[active_loginid];
+                            if (token) {
+                                this.addLog(`Authorizing with fallback token for ${active_loginid}...`);
+                                this.ws?.send(JSON.stringify({ authorize: token }));
+                                return;
+                            }
+                        }
+
+                        // 3. Try global ClientStore getToken() if available
+                        const storeToken = this.root_store.client.getToken?.();
+                        if (storeToken) {
+                            this.addLog('Authorizing with store token...');
+                            this.ws?.send(JSON.stringify({ authorize: storeToken }));
+                            return;
+                        }
+
+                        this.addLog('No token found in storage. Proceeding with public ticks.');
                         this.is_authorizing = false;
                         this.subscribeToTicks(this.selected_symbol);
                     } catch (e) {
-                        this.addLog(`Local token error: ${e.message}. Proceeding with public ticks.`);
+                        this.addLog(`Token retrieval error: ${e.message}. Proceeding with public ticks.`);
                         this.is_authorizing = false;
                         this.subscribeToTicks(this.selected_symbol);
                     }
@@ -335,7 +370,7 @@ export default class OverUnderStore {
                                 this.addLog(`Authorization Failed: ${data.error.message}.`);
                                 this.is_authorized = false;
                             } else {
-                                this.addLog('Authorization Successful!');
+                                this.addLog(`Authorization Successful for ${data.authorize.loginid}!`);
                                 this.is_authorized = true;
                                 this.connection_status = STATUS_AUTHORIZED;
                             }
@@ -371,10 +406,8 @@ export default class OverUnderStore {
 
                             if (this.is_auto_running && !this.is_analyzing_volatility && this.active_contracts.size === 0) {
                                 if (this.is_differs_mode) {
-                                    // DIFFERS mode runs independently of trigger digits
                                     this.analyzeAndExecuteDiffers();
                                 } else {
-                                    // Standard Over/Under strategies still use trigger digits
                                     let is_triggered = this.use_second_trigger ? (this.last_digit === this.entry_digit && this.last_last_digit === this.second_entry_digit) : (this.last_digit === this.entry_digit);
                                     if (is_triggered) {
                                         if (this.is_recovery_active) {
@@ -464,14 +497,22 @@ export default class OverUnderStore {
     }
 
     executeTrade(contract_type: string, barrier: string) {
-        if (!this.ws || this.ws.readyState !== WebSocket.OPEN || (!this.is_authorized && !this.root_store.client.is_logged_in)) return;
+        const is_logged_in = this.is_authorized || 
+                           this.root_store.client.is_logged_in || 
+                           !!localStorage.getItem('active_loginid');
+
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !is_logged_in) return;
         const tradeAmount = Number(this.stake);
         this.addLog(`Executing: ${contract_type} ${barrier} @ ${tradeAmount}`);
         this.ws.send(JSON.stringify({ buy: 1, price: tradeAmount, parameters: { amount: tradeAmount, basis: 'stake', currency: 'USD', duration: 1, duration_unit: 't', symbol: this.selected_symbol, contract_type, barrier } }));
     }
 
     executeMultiTrade() {
-        if (!this.ws || this.ws.readyState !== WebSocket.OPEN || (!this.is_authorized && !this.root_store.client.is_logged_in)) return;
+        const is_logged_in = this.is_authorized || 
+                           this.root_store.client.is_logged_in || 
+                           !!localStorage.getItem('active_loginid');
+
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !is_logged_in) return;
         const tradeAmount = Number(this.stake);
         this.addLog(`Executing Multi-Trade: O5/U4 @ ${tradeAmount}`);
         const baseParams = { amount: tradeAmount, basis: 'stake', currency: 'USD', duration: 1, duration_unit: 't', symbol: this.selected_symbol };
