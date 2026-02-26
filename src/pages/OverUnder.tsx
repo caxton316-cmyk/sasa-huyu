@@ -14,6 +14,7 @@ const OverUnder = observer(() => {
         stake,
         martingale,
         is_volatility_changer,
+        is_differs_mode,
         is_automate,
         use_second_trigger,
         is_manual_mode,
@@ -34,6 +35,7 @@ const OverUnder = observer(() => {
         setStake,
         setMartingale,
         setIsVolatilityChanger,
+        setIsDiffersMode,
         setIsAutomate,
         setUseSecondTrigger,
         setIsManualMode,
@@ -152,19 +154,19 @@ const OverUnder = observer(() => {
                         <label>Trigger Digits</label>
                         <div className="entry-config-row">
                             <div className="entry-config">
-                                <input className="ui-input digit-entry" type="number" min="0" max="9" value={entry_digit} onChange={(e) => setEntryDigit(Number(e.target.value))} disabled={is_auto_running || is_authorizing} title="First Trigger" />
+                                <input className="ui-input digit-entry" type="number" min="0" max="9" value={entry_digit} onChange={(e) => setEntryDigit(Number(e.target.value))} disabled={is_auto_running || is_authorizing || is_differs_mode} title="First Trigger" />
                                 <div className={`status-led ${over_under.last_digit === Number(entry_digit) ? 'glow' : ''}`}></div>
                             </div>
                             {use_second_trigger && (
                                 <div className="entry-config">
-                                    <input className="ui-input digit-entry" type="number" min="0" max="9" value={second_entry_digit} onChange={(e) => setSecondEntryDigit(Number(e.target.value))} disabled={is_auto_running || is_authorizing} title="Second Trigger" />
+                                    <input className="ui-input digit-entry" type="number" min="0" max="9" value={second_entry_digit} onChange={(e) => setSecondEntryDigit(Number(e.target.value))} disabled={is_auto_running || is_authorizing || is_differs_mode} title="Second Trigger" />
                                     <div className={`status-led ${over_under.last_last_digit === Number(entry_digit) && over_under.last_digit === Number(second_entry_digit) ? 'glow' : ''}`}></div>
                                 </div>
                             )}
                             <button 
                                 className={`ui-switch mini second-trigger-btn ${use_second_trigger ? 'active' : ''}`}
                                 onClick={() => setUseSecondTrigger(!use_second_trigger)}
-                                disabled={is_auto_running || is_authorizing}
+                                disabled={is_auto_running || is_authorizing || is_differs_mode}
                                 title="Toggle Second Trigger"
                             >
                                 2ND
@@ -193,7 +195,17 @@ const OverUnder = observer(() => {
                             {is_volatility_changer ? 'ON' : 'OFF'}
                         </button>
                     </div>
-                    {is_volatility_changer && (
+                    <div className="input-group switch-group">
+                        <label>DIFFERS</label>
+                        <button 
+                            className={`ui-switch ${is_differs_mode ? 'active' : ''}`} 
+                            onClick={() => setIsDiffersMode(!is_differs_mode)}
+                            disabled={is_auto_running || is_authorizing}
+                        >
+                            {is_differs_mode ? 'ON' : 'OFF'}
+                        </button>
+                    </div>
+                    {(is_volatility_changer || is_differs_mode) && (
                         <div className="input-group switch-group">
                             <label>Automate</label>
                             <button
@@ -210,14 +222,14 @@ const OverUnder = observer(() => {
                         <button 
                             className={`ui-switch ${is_manual_mode ? 'active' : ''}`} 
                             onClick={() => setIsManualMode(!is_manual_mode)}
-                            disabled={is_auto_running || is_authorizing}
+                            disabled={is_auto_running || is_authorizing || is_differs_mode}
                         >
                             {is_manual_mode ? 'ON' : 'OFF'}
                         </button>
                     </div>
                 </div>
 
-                {is_manual_mode && (
+                {is_manual_mode && !is_differs_mode && (
                     <div className="manual-config-box">
                         <div className="input-row">
                             <div className="input-group">
@@ -252,6 +264,7 @@ const OverUnder = observer(() => {
                             <select className="ui-select" value={recovery_contract_type} onChange={(e) => setRecoveryContractType(e.target.value)} disabled={is_auto_running || is_authorizing}>
                                 <option value="DIGITOVER">OVER</option>
                                 <option value="DIGITUNDER">UNDER</option>
+                                <option value="DIGITDIFF">DIFFERS</option>
                             </select>
                         </div>
                         <div className="input-group">

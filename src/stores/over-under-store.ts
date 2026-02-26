@@ -40,6 +40,7 @@ export default class OverUnderStore {
     initial_stake = 1;
     martingale = 2;
     is_volatility_changer = false;
+    is_differs_mode = false;
     is_automate = false;
     use_second_trigger = true;
     is_manual_mode = false;
@@ -64,6 +65,8 @@ export default class OverUnderStore {
     best_symbol: string | null = null;
     current_analyzing_symbol: string | null = null;
 
+    private _boundAuthHandler: (event: MessageEvent) => void;
+
     constructor(root_store: RootStore) {
         makeObservable(this, {
             connection_status: observable,
@@ -75,6 +78,7 @@ export default class OverUnderStore {
             initial_stake: observable,
             martingale: observable,
             is_volatility_changer: observable,
+            is_differs_mode: observable,
             is_automate: observable,
             use_second_trigger: observable,
             is_manual_mode: observable,
@@ -95,6 +99,7 @@ export default class OverUnderStore {
             setStake: action.bound,
             setMartingale: action.bound,
             setIsVolatilityChanger: action.bound,
+            setIsDiffersMode: action.bound,
             setIsAutomate: action.bound,
             setUseSecondTrigger: action.bound,
             setIsManualMode: action.bound,
@@ -116,7 +121,8 @@ export default class OverUnderStore {
         });
         this.root_store = root_store;
         this.initializeWorker();
-        window.addEventListener('message', this.handleAuthResponse.bind(this));
+        this._boundAuthHandler = this.handleAuthResponse.bind(this);
+        window.addEventListener('message', this._boundAuthHandler);
     }
 
     handleAuthResponse(event: MessageEvent) {
@@ -162,8 +168,8 @@ export default class OverUnderStore {
         if (this.analysis_queue.length > 0) {
             this.current_analyzing_symbol = this.analysis_queue.shift();
             if (this.current_analyzing_symbol) {
-                this.addLog(`Analyzing: ${this.current_analyzing_symbol}`);
-                this.ws?.send(JSON.stringify({ ticks_history: this.current_analyzing_symbol, count: 50, end: 'latest', style: 'ticks' }));
+                // Reduced count to 25 for faster analysis as requested
+                this.ws?.send(JSON.stringify({ ticks_history: this.current_analyzing_symbol, count: 25, end: 'latest', style: 'ticks' }));
             }
         } else {
             this.is_analyzing_volatility = false;
@@ -191,6 +197,7 @@ export default class OverUnderStore {
     setStake(stake: number) { this.stake = stake; if (!this.is_auto_running) this.initial_stake = stake; }
     setMartingale(value: number) { this.martingale = value; }
     setIsVolatilityChanger(value: boolean) { this.is_volatility_changer = value; }
+    setIsDiffersMode(value: boolean) { this.is_differs_mode = value; }
     setIsAutomate(value: boolean) { this.is_automate = value; }
     setUseSecondTrigger(value: boolean) { this.use_second_trigger = value; }
     setIsManualMode(value: boolean) { this.is_manual_mode = value; }
@@ -351,17 +358,21 @@ export default class OverUnderStore {
                             this.tick_history = [...this.tick_history.slice(-MAX_TICKS + 1), digit];
 
                             if (this.is_auto_running && !this.is_analyzing_volatility && this.active_contracts.size === 0) {
-                                let is_triggered = this.use_second_trigger ? (this.last_digit === this.entry_digit && this.last_last_digit === this.second_entry_digit) : (this.last_digit === this.entry_digit);
-                                if (.is_triggered) {
-                                    if (this.is_recovery_active) {
-                                        this.addLog(`Trigger Hit: Recovery Trade`);
-                                        this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
-                                    } else if (this.is_manual_mode) {
-                                        this.addLog(`Trigger Hit: Manual Trade`);
-                                        this.executeTrade(this.manual_contract_type, this.manual_barrier);
-                                    } else {
-                                        this.addLog(`Trigger Hit: Standard Multi-Trade`);
-                                        this.executeMultiTrade();
+                                if (this.is_differs_mode) {
+                                    this.analyzeAndExecuteDiffers();
+                                } else {
+                                    let is_triggered = this.use_second_trigger ? (this.last_digit === this.entry_digit && this.last_last_digit === this.second_entry_digit) : (this.last_digit === this.entry_digit);
+                                    if (is_triggered) {
+                                        if (this.is_recovery_active) {
+                                            this.addLog(`Trigger Hit: Recovery Trade`);
+                                            this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
+                                        } else if (this.is_manual_mode) {
+                                            this.addLog(`Trigger Hit: Manual Trade`);
+                                            this.executeTrade(this.manual_contract_type, this.manual_barrier);
+                                        } else {
+                                            this.addLog(`Trigger Hit: Standard Multi-Trade`);
+                                            this.executeMultiTrade();
+                                        }
                                     }
                                 }
                             }
@@ -386,6 +397,34 @@ export default class OverUnderStore {
         }
     }
 
+    analyzeAndExecuteDiffers() {
+        if (this.tick_history.length < 10) return;
+
+        const last5 = this.tick_history.slice(-5);
+        const last10 = this.tick_history.slice(-10);
+        
+        // Count occurrences in last 100 ticks for "least appearing" context
+        const stats = Array(10).fill(0);
+        this.tick_history.slice(-100).forEach(d => stats[d]++);
+        
+        // Find digits that appeared in the last 5 ticks
+        const appearedInLast5 = Array.from(new Set(last5));
+        
+        // Filter those that are "least appearing" overall (among those that appeared)
+        // and ensure they are not increasing in frequency in the last 10 ticks
+        const candidates = appearedInLast5.filter(d => {
+            const countLast5 = last5.filter(x => x === d).length;
+            const countPrev5 = last10.slice(0, 5).filter(x => x === d).length;
+            return countLast5 <= countPrev5; // Not increasing
+        }).sort((a, b) => stats[a] - stats[b]);
+
+        if (candidates.length > 0) {
+            const targetDigit = candidates[0];
+            this.addLog(`Differs Logic: Target Digit ${targetDigit} (Least appearing & not increasing)`);
+            this.executeTrade('DIGITDIFF', String(targetDigit));
+        }
+    }
+
     processRoundResults() {
         const all_loss = Array.from(this.contract_results.values()).every(p => p < 0);
         this.addLog(`Round finished. All trades lost: ${all_loss}`);
@@ -395,7 +434,11 @@ export default class OverUnderStore {
             this.setIsRecoveryActive(true);
             if (!this.use_recovery_delay) {
                 this.addLog("Immediate recovery trade");
-                this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
+                if (this.is_differs_mode) {
+                    this.analyzeAndExecuteDiffers();
+                } else {
+                    this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
+                }
             }
         } else {
             this.stake = this.initial_stake;
@@ -427,7 +470,7 @@ export default class OverUnderStore {
     }
 
     dispose() {
-        window.removeEventListener('message', this.handleAuthResponse.bind(this));
+        window.removeEventListener('message', this._boundAuthHandler);
         if (this.ws) { this.ws.onclose = null; this.ws.close(); }
         if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
         this.volatilityAnalyzer?.terminate();
