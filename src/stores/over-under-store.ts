@@ -3,6 +3,7 @@ import { action, makeObservable, observable, reaction } from 'mobx';
 import { TStores } from '@/types/stores.types';
 import RootStore from './root-store';
 import { getAppId, getSocketURL } from '@/components/shared';
+import { MessageTypes } from '@/external/bot-skeleton';
 
 const STATUS_OFFLINE = 'Offline';
 const STATUS_CONNECTING = 'Connecting...';
@@ -212,6 +213,11 @@ export default class OverUnderStore {
         const timestamp = new Date().toLocaleTimeString();
         this.debug_info.unshift(`[${timestamp}] ${msg}`);
         if (this.debug_info.length > 20) this.debug_info.pop();
+        
+        // SYNC WITH JOURNAL: Push important logs to the main Journal panel
+        if (this.root_store.journal) {
+            this.root_store.journal.pushMessage(msg, MessageTypes.NOTIFY);
+        }
     }
 
     clearDebug() {
@@ -393,9 +399,13 @@ export default class OverUnderStore {
                             break;
                         case 'proposal_open_contract':
                             const contract = data.proposal_open_contract;
-                            // SYNC WITH MAIN PANEL: Always report to SummaryCardStore
+                            
+                            // SYNC WITH ALL PANELS: Report to Summary, Transactions, and Journals
                             if (this.root_store.summary_card) {
                                 this.root_store.summary_card.onBotContractEvent(contract);
+                            }
+                            if (this.root_store.transactions) {
+                                this.root_store.transactions.onBotContractEvent(contract);
                             }
                             
                             if (contract.is_sold) {
