@@ -466,18 +466,16 @@ const OverUnder = observer(() => {
                                                 <div className='switch-handle' />
                                             </button>
                                         </div>
-                                        {is_differs_mode && (
-                                            <div className='switch-item'>
-                                                <label>2-Term Compound</label>
-                                                <button
-                                                    className={`modern-switch ${is_2term_mode ? 'active' : ''}`}
-                                                    onClick={() => setIs2termMode(!is_2term_mode)}
-                                                    disabled={is_auto_running || is_authorizing}
-                                                >
-                                                    <div className='switch-handle' />
-                                                </button>
-                                            </div>
-                                        )}
+                                        <div className='switch-item'>
+                                            <label>2-Term Compound</label>
+                                            <button
+                                                className={`modern-switch ${is_2term_mode ? 'active' : ''}`}
+                                                onClick={() => setIs2termMode(!is_2term_mode)}
+                                                disabled={is_auto_running || is_authorizing}
+                                            >
+                                                <div className='switch-handle' />
+                                            </button>
+                                        </div>
                                         {(is_volatility_changer || is_differs_mode) && (
                                             <div className='switch-item'>
                                                 <label>Auto Cycle</label>

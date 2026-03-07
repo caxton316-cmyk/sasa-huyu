@@ -628,12 +628,14 @@ export default class OverUnderStore {
                 }
             } else {
                 // Normal win logic - only apply 2-term if button is ON
+                // This applies to ALL strategies (differs, manual, and multi-trade like O5/U4)
                 if (this.is_2term_mode) {
                     const nextStake = Number((this.stake + roundProfit).toFixed(2));
                     this.addLog(`2term Applied: Stake updated with profit ${roundProfit.toFixed(2)}. New stake: ${nextStake}`);
                     this.stake = nextStake;
                     this.addLog(`Win detected. 2-term mode is ON, stake increased to: ${this.stake}`);
                 } else {
+                    // 2-term is OFF: Always reset to initial stake
                     this.stake = this.initial_stake;
                     this.addLog(`Win detected. 2-term mode is OFF, resetting to initial stake: ${this.stake}`);
                 }
