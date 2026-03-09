@@ -488,24 +488,26 @@ export default class RunPanelStore {
     clearStat = () => {
         const { journal, summary_card, transactions } = this.root_store;
 
-        // Minimal clear operation - avoid API calls that trigger Deriv throttling
-        runInAction(() => {
-            // Close dialog first
-            this.onCloseDialog();
-            
-            // Only clear data - don't trigger API calls
-            if (journal && journal.unfiltered_messages) {
-                journal.unfiltered_messages = [];
+        this.onCloseDialog();
+        
+        // Call the proper clear methods - they handle MobX reactivity and localStorage correctly
+        try {
+            if (journal) {
+                journal.clear();
+                console.log('[Run Panel] Journal cleared');
             }
             if (summary_card) {
                 summary_card.clear();
+                console.log('[Run Panel] Summary card cleared');
             }
-            if (transactions && transactions.transactions) {
-                transactions.transactions = [];
+            if (transactions) {
+                transactions.clear();
+                console.log('[Run Panel] Transactions cleared');
             }
-        });
-        
-        console.log('[Run Panel] Trade history cleared successfully');
+            console.log('[Run Panel] ✅ All trade history cleared successfully');
+        } catch (error) {
+            console.error('[Run Panel] ❌ Error clearing statistics:', error);
+        }
     };
 
     toggleStatisticsInfoModal = () => {
