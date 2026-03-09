@@ -4,7 +4,7 @@ This template was generated using `create-deriv-v2`
 
 ## Getting started
 
-To run the development server:
+To run the development server: next
 
 ```bash
 npm run dev
