@@ -671,7 +671,8 @@ export default class OverUnderStore {
         if (surge_count >= 3) {
             const rejection_digit = this.last_digit;
 
-            const history = this.tick_history;
+            // Use the last 1000 ticks for analysis, as per the strategy rule.
+            const history = this.tick_history.slice(-1000);
             const totalTicks = history.length;
 
             // Build per-digit counts once for all checks
@@ -681,10 +682,10 @@ export default class OverUnderStore {
             const digitCount = digitCounts[rejection_digit!];
             const digitPct = totalTicks > 0 ? (digitCount / totalTicks) * 100 : 0;
 
-            // ── Restriction 1: digit must not exceed 10% in last 1000 ticks ──
+            // ── Restriction 1: digit must not exceed 10% in the analysis window ──
             if (digitPct > 10) {
                 this.addLog(
-                    `Differs: SKIP digit ${rejection_digit} — too frequent (${digitPct.toFixed(1)}% in ${totalTicks} ticks, limit 10%). Re-analyzing...`
+                    `Differs: SKIP digit ${rejection_digit} — too frequent (${digitPct.toFixed(1)}% in last ${totalTicks} ticks, limit 10%). Re-analyzing...`
                 );
                 return;
             }
