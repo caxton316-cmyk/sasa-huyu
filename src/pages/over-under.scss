@@ -48,6 +48,13 @@ $cyan:    #06b6d4;
         background-size: 24px 24px;
     }
     > * { position: relative; z-index: 1; }
+
+    // On mobile, allow the entire page to scroll if content overflows.
+    @media (max-width: 760px) {
+        height: auto;
+        min-height: 100%;
+        overflow-y: auto;
+    }
 }
 
 // ── Guide FAB ───────────────────────────────────────────────
@@ -240,19 +247,30 @@ $cyan:    #06b6d4;
     gap: 14px;
 
     @media (max-width: 960px)  { grid-template-columns: 320px 1fr; }
-    @media (max-width: 760px)  { display: flex; flex-direction: column; }
+    @media (max-width: 760px)  {
+        display: flex;
+        flex-direction: column;
+    }
 }
 
 // ── Config Panel ──────────────────────────────────────────────
 .ou-panel {
     background: $bg1; border: 1px solid $b1; border-radius: 14px;
-    overflow-y: auto; overflow-x: hidden;
     box-shadow: 0 8px 28px rgba(0,0,0,0.28);
     position: relative;
-    padding-bottom: 80px;
+    // On desktop, the panel scrolls internally.
+    overflow-y: auto;
 
     &::-webkit-scrollbar { width: 3px; }
     &::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.07); border-radius: 3px; }
+
+    // Add a spacer at the bottom of the scroll area to prevent the last
+    // item from being obscured by the sticky CTA button on desktop.
+    &::after {
+        content: '';
+        display: block;
+        height: 85px;
+    }
 
     &::before {
         content: '';
@@ -272,10 +290,10 @@ $cyan:    #06b6d4;
         svg { color: $blue; }
     }
 
+    // On mobile, disable internal scrolling and the spacer.
     @media (max-width: 760px) {
-        flex-shrink: 0;
-        max-height: 60vh;
-        padding-bottom: 0;
+        overflow-y: visible;
+        &::after { display: none; }
     }
 }
 
@@ -433,7 +451,8 @@ $cyan:    #06b6d4;
 
 // ── CTA ──────────────────────────────────────────────────────
 .ou-cta-wrap {
-    position: absolute;
+    // Stick to the bottom of the scrolling panel on desktop.
+    position: sticky;
     bottom: 0;
     left: 0;
     right: 0;
@@ -443,11 +462,13 @@ $cyan:    #06b6d4;
     backdrop-filter: blur(4px);
     border-top: 1px solid $b0;
 
+    // On mobile, it's a normal block at the end of the form.
     @media (max-width: 760px) {
         position: static;
         background: transparent;
         backdrop-filter: none;
         padding-top: 0;
+        border-top: 1px solid $b0;
     }
 }
 
@@ -495,7 +516,8 @@ $cyan:    #06b6d4;
 
     @media (max-width: 760px) {
         flex-grow: 1;
-        min-height: 200px;
+        min-height: 320px;
+        height: auto;
     }
 
     &::before {
