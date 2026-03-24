@@ -219,7 +219,7 @@ const OverUnder = observer(() => {
                                     style={{ background: hot ? 'linear-gradient(180deg,#10b981,#059669)' : cold ? 'linear-gradient(180deg,#ef4444,#b91c1c)' : 'linear-gradient(180deg,#3b82f6,#1d4ed8)' }}
                                 />
                             </div>
-                            <div className='ou-cell__pct'>{pct.toFixed(0)}%</div>
+                            <div className='ou-cell__pct'>{pct.toFixed(1)}%</div>
                         </motion.div>
                     );
                 })}
