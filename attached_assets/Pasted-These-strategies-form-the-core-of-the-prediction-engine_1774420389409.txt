@@ -1,0 +1,30 @@
+These strategies form the core of the prediction engine, looking for non-obvious repeating patterns in the sequence of digits.
+
+N-Gram Sequence Prediction (nGramStrategy): This is a powerful technique that looks for sequences of digits. For example, if it sees the pattern 1-5-3 has historically been followed by the digit 8, it will predict 8.
+Markov Chain Strategy (markovChainStrategy): This strategy calculates the probability of one digit appearing after another. It builds a transition matrix, so if digit 4 is frequently followed by digit 9, it will predict 9 the next time a 4 appears.
+Cyclical Pattern Detection (cyclicalPatternStrategy): This looks for longer, repeating cycles of digits (e.g., 2-4-6-2-4-6). If it detects a cycle, it predicts the next digit in the sequence.
+K-Nearest Neighbors (KNN) Pattern Match (knnPatternStrategy): This is a machine learning concept. It finds historical patterns that are most similar to the current sequence of digits and predicts the next digit based on what followed those similar patterns.
+These strategies focus on the speed and "acceleration" of digit appearances, treating them like a moving object.
+
+Adaptive Momentum (adaptiveMomentumStrategy): This is a heavily weighted strategy that analyzes momentum across multiple time scales (e.g., the last 5 ticks vs. the last 12 ticks) to find the digit with the most "explosive" momentum.
+Digit Acceleration (digitAccelerationStrategy): This fascinating strategy calculates the rate of change of the velocity of digits. It's like asking, "Is the trend of a digit appearing not just increasing, but increasing at an accelerating rate?"
+Hot-Cold Digit Tracker (hotColdDigitStrategy): A simple but effective strategy that gives a massive boost to any digit that has appeared multiple times in the last few ticks (a "hot" digit).
+These strategies use statistical distributions and probability theories to find the most likely outcomes.
+
+Bayesian Probability (bayesianProbabilityStrategy): This strategy starts with an equal probability for all 10 digits and then continuously updates these probabilities based on the incoming digits, giving more weight to recent data.
+Entropy Analysis (entropyStrategy): This measures the "randomness" or "predictability" of the market. If entropy is low (predictable), it will favor the most frequent digit. If entropy is high (random), it will favor safer, middle-of-the-road digits.
+Digit Repetition & Frequency (digitRepetitionStrategy): The most fundamental strategy. It analyzes which digits have appeared most frequently, giving an exponential weight to the most recent ticks.
+The system creatively adapts standard financial technical indicators to the stream of digits, treating the last digit as a "price."
+
+RSI (Relative Strength Index): Used to determine if the market is "overbought" (favoring high digits) or "oversold" (favoring low digits).
+MACD (Moving Average Convergence Divergence): Used to identify bullish (upward) or bearish (downward) momentum in the digits.
+Bollinger Bands: Used to measure volatility. In low volatility, the system predicts stable, middle digits (like 4, 5, 6).
+The real magic is how all these strategies are combined.
+
+Weighted Execution: All 30+ strategies are run simultaneously on the recent tick data. Each strategy is assigned a weight based on its historical effectiveness, with short-term pattern matchers getting the highest weights.
+Multi-Dimensional Scoring: A digit doesn't just get a "vote." It gets a complex score based on:
+The number of strategies that predicted it.
+The combined weight of those strategies.
+The confidence score from each individual strategy.
+Tier-based bonuses for predictions coming from the most powerful, specialized strategies.
+Consensus and Dominance: The engine calculates a final combinedScore for each digit. It then sorts the digits and selects the Top 5. The overall confidence score is determined by how dominant the top prediction is and how strong the consensus is among the highest-tiered strategies.
