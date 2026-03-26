@@ -233,12 +233,41 @@ export default class OverUnderStore {
         if (this.analysis_queue.length > 0) {
             const sym = this.analysis_queue.shift()!;
             runInAction(() => { this.current_analyzing_symbol = sym; });
+            
             if (this.ws?.readyState === WebSocket.OPEN) {
                 this.ws.send(JSON.stringify({ ticks_history: sym, count: 1000, end: 'latest', style: 'ticks' }));
             } else {
-                // WebSocket not ready — skip this symbol and continue
-                this.addLog(`⚠️ WS not open during analysis, skipping ${sym}.`);
-                this.processAnalysisQueue();
+                // WebSocket not ready — wait and retry
+                this.addLog(`⏳ Waiting for WebSocket connection...`);
+                const retryDelay = 500;
+                let retryCount = 0;
+                const maxRetries = 20; // Wait up to 10 seconds
+                
+                const waitForWs = () => {
+                    retryCount++;
+                    if (this.ws?.readyState === WebSocket.OPEN) {
+                        this.addLog(`✅ WebSocket ready, processing ${sym}...`);
+                        this.ws.send(JSON.stringify({ ticks_history: sym, count: 1000, end: 'latest', style: 'ticks' }));
+                    } else if (retryCount < maxRetries) {
+                        setTimeout(waitForWs, retryDelay);
+                    } else {
+                        // Give up after max retries
+                        this.addLog(`⚠️ WS connection timeout for ${sym}, using default.`);
+                        runInAction(() => {
+                            this.best_symbol = 'R_100';
+                            this.best_score = 0;
+                        });
+                        this._clearAnalysisTimeout();
+                        runInAction(() => {
+                            this.is_analyzing_volatility = false;
+                            this.current_analyzing_symbol = null;
+                            this.analysis_queue = [];
+                        });
+                        this.addLog('Analysis complete. Using default symbol R_100.');
+                    }
+                };
+                
+                setTimeout(waitForWs, retryDelay);
             }
         } else {
             this._clearAnalysisTimeout();
