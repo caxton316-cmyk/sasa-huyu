@@ -9,13 +9,14 @@ import {
 import { useStore } from '@/hooks/useStore';
 import './over-under.scss';
 
-type Strategy = 'over_under' | 'differs' | 'rise_fall' | 'manual';
+type Strategy = 'over_under' | 'differs' | 'differs_v2' | 'rise_fall' | 'manual';
 
 const STRAT_META: Record<Strategy, { label: string; color: string; glow: string; desc: string }> = {
-    over_under: { label: 'Over 5 / Under 4', color: '#3b82f6', glow: 'rgba(59,130,246,0.4)',  desc: 'Fires Over 5 & Under 4 simultaneously on trigger digit' },
-    differs:    { label: 'Differs',           color: '#a855f7', glow: 'rgba(168,85,247,0.4)',  desc: 'Detects pushback reversal pattern (3+ ticks + reversal)' },
-    rise_fall:  { label: 'Rise / Fall',       color: '#10b981', glow: 'rgba(16,185,129,0.4)',  desc: 'MACD-based trend momentum — places Rise or Fall contract' },
-    manual:     { label: 'Manual',            color: '#f97316', glow: 'rgba(249,115,22,0.4)',  desc: 'You choose contract type, barrier digit and trigger' },
+    over_under:  { label: 'Over 5 / Under 4', color: '#3b82f6', glow: 'rgba(59,130,246,0.4)',  desc: 'Fires Over 5 & Under 4 simultaneously on trigger digit' },
+    differs:     { label: 'Differs',           color: '#a855f7', glow: 'rgba(168,85,247,0.4)',  desc: 'Detects pushback reversal pattern (3+ ticks + reversal)' },
+    differs_v2:  { label: 'Differs V2',       color: '#ec4899', glow: 'rgba(236,72,153,0.4)',  desc: 'Predicts 9 digit → bets DIFFER with opposite digit → waits 3 ticks (auto-switch executes immediately)' },
+    rise_fall:   { label: 'Rise / Fall',      color: '#10b981', glow: 'rgba(16,185,129,0.4)',  desc: 'MACD-based trend momentum — places Rise or Fall contract' },
+    manual:      { label: 'Manual',           color: '#f97316', glow: 'rgba(249,115,22,0.4)',  desc: 'You choose contract type, barrier digit and trigger' },
 };
 
 const Toggle = ({ on, onToggle, disabled, color = '#3b82f6' }: {
@@ -37,14 +38,14 @@ const OverUnder = observer(() => {
     const {
         connection_status, tick_history, last_digit, is_auto_running,
         stake, martingale, is_volatility_changer,
-        is_differs_mode, is_2term_mode, is_rise_fall_mode, is_automate,
+        is_differs_mode, is_differs_v2_mode, is_2term_mode, is_rise_fall_mode, is_automate,
         use_second_trigger, is_manual_mode, manual_contract_type, manual_barrier,
         recovery_contract_type, recovery_barrier, use_recovery_delay,
         entry_digit, second_entry_digit, is_turbo, selected_symbol,
         debug_info, is_analyzing_volatility, is_authorizing,
         differs_predicted_top4,
         setStake, setMartingale, setIsVolatilityChanger,
-        setIsDiffersMode, setIs2termMode, setIsRiseFallMode, setIsAutomate,
+        setIsDiffersMode, setIsDiffersV2Mode, setIs2termMode, setIsRiseFallMode, setIsAutomate,
         setUseSecondTrigger, setIsManualMode, setManualContractType, setManualBarrier,
         setRecoveryContractType, setRecoveryBarrier, setUseRecoveryDelay,
         setEntryDigit, setSecondEntryDigit, setIsTurbo, setSelectedSymbol,
@@ -55,6 +56,7 @@ const OverUnder = observer(() => {
     const [showRecovery, setShowRecovery] = useState(false);
 
     const activeStrategy: Strategy = is_differs_mode ? 'differs'
+        : is_differs_v2_mode ? 'differs_v2'
         : is_rise_fall_mode ? 'rise_fall'
         : is_manual_mode ? 'manual'
         : 'over_under';
@@ -65,6 +67,7 @@ const OverUnder = observer(() => {
     const selectStrategy = (s: Strategy) => {
         if (disabled) return;
         setIsDiffersMode(s === 'differs');
+        setIsDiffersV2Mode(s === 'differs_v2');
         setIsRiseFallMode(s === 'rise_fall');
         setIsManualMode(s === 'manual');
     };
@@ -168,6 +171,7 @@ const OverUnder = observer(() => {
                                     { c: 'blue',   t: 'Market Settings',   items: ['<b>Index</b> — Volatility market to trade (10 available).', '<b>Volatility Changer</b> — Auto-scans all indices and picks the best one for your strategy.'] },
                                     { c: 'blue',   t: 'Over 5 / Under 4',  items: ['Fires Over 5 + Under 4 simultaneously when trigger digit appears.', '<b>2ND</b> — Two consecutive trigger digits required.', '<b>Turbo</b> — Re-fires immediately after each settled round.'] },
                                     { c: 'purple', t: 'Differs',           items: ['3+ ticks in one direction → reversal tick → bot places Differs on reversal digit.', '<b>2-Term Compound</b> — Adds profit onto next stake.', '<b>Auto Cycle</b> — Loops after each round.'] },
+                                    { c: 'pink',   t: 'Differs V2',        items: ['Predicts most likely 9 digit → bets DIFFER with the digit that has NOT appeared.', 'Waits 3 ticks after trade settles before predicting again.', '<b>Auto Switch ON</b> — Executes immediately on new symbol after scanning (no 3-tick wait).', 'No trigger digit required.'] },
                                     { c: 'green',  t: 'Rise / Fall',       items: ['MACD momentum detection on live ticks → Rise or Fall contract.'] },
                                     { c: 'orange', t: 'Manual',            items: ['Choose Contract Type (Over/Under/Differs), Barrier, and Trigger Digit yourself.'] },
                                     { c: 'red',    t: 'Recovery System',   items: ['After a loss, Martingale stake with Recovery settings until loss is recovered.', '<b>Trigger Wait</b> — Waits for trigger before recovery trade.'] },

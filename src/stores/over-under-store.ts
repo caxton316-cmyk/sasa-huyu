@@ -44,6 +44,7 @@ export default class OverUnderStore {
     martingale = 2;
     is_volatility_changer = false;
     is_differs_mode = false;
+    is_differs_v2_mode = false;
     is_automate = false;
     use_second_trigger = true;
     is_manual_mode = false;
@@ -67,6 +68,8 @@ export default class OverUnderStore {
     is_rise_fall_mode = false;
     last_profit = 0;
     differs_predicted_top4: number[] = [];
+    differs_v2_predicted_digit: number | null = null;
+    differs_v2_post_trade_ticks = 0;
     private _tick_prices: number[] = [];
     total_loss_to_recover = 0;
     differs_digit_appearance_count = 0;
@@ -121,13 +124,17 @@ export default class OverUnderStore {
             is_differs_recovery_mode: observable,
             is_2term_mode: observable,
             is_rise_fall_mode: observable,
+            is_differs_v2_mode: observable,
             differs_predicted_top4: observable,
+            differs_v2_predicted_digit: observable,
+            differs_v2_post_trade_ticks: observable,
             setStake: action.bound,
             setIsRiseFallMode: action.bound,
             setIs2termMode: action.bound,
             setMartingale: action.bound,
             setIsVolatilityChanger: action.bound,
             setIsDiffersMode: action.bound,
+            setIsDiffersV2Mode: action.bound,
             setIsAutomate: action.bound,
             setUseSecondTrigger: action.bound,
             setIsManualMode: action.bound,
@@ -337,6 +344,7 @@ export default class OverUnderStore {
     setMartingale(value: number) { this.martingale = value; }
     setIsVolatilityChanger(value: boolean) { this.is_volatility_changer = value; }
     setIsDiffersMode(value: boolean) { this.is_differs_mode = value; }
+    setIsDiffersV2Mode(value: boolean) { this.is_differs_v2_mode = value; }
     setIs2termMode(value: boolean) { this.is_2term_mode = value; }
     setIsRiseFallMode(value: boolean) { this.is_rise_fall_mode = value; }
     setIsAutomate(value: boolean) { this.is_automate = value; }
@@ -369,6 +377,8 @@ export default class OverUnderStore {
             this.is_processing_round = false;
             this.differs_barrier_digit = null;
             this.is_differs_recovery_mode = false;
+            this.differs_v2_predicted_digit = null;
+            this.differs_v2_post_trade_ticks = 0;
         }
     }
 
@@ -488,13 +498,14 @@ export default class OverUnderStore {
                                 const rawPrices = data.history.prices.map((p: string | number) => Number(p));
                                 const digits = rawPrices.map((p: number) => Number(p.toFixed(pip_size).slice(-1)));
                                 const strategy = this.is_differs_mode ? 'differs'
+                                    : this.is_differs_v2_mode ? 'differs_v2'
                                     : this.is_rise_fall_mode ? 'rise_fall'
                                     : this.is_manual_mode ? 'manual'
                                     : 'over_under';
                                 this.volatilityAnalyzer?.postMessage({
                                     ticks: digits,
                                     prices: rawPrices,
-                                    contract_type: this.is_recovery_active ? this.recovery_contract_type : (this.is_manual_mode ? this.manual_contract_type : (this.is_differs_mode ? 'DIGITDIFF' : 'DIGITOVER')),
+                                    contract_type: this.is_recovery_active ? this.recovery_contract_type : (this.is_manual_mode ? this.manual_contract_type : (this.is_differs_mode || this.is_differs_v2_mode ? 'DIGITDIFF' : 'DIGITOVER')),
                                     barrier: this.is_recovery_active ? this.recovery_barrier : (this.is_manual_mode ? this.manual_barrier : '5'),
                                     strategy,
                                 });
@@ -549,14 +560,21 @@ export default class OverUnderStore {
                             this.last_digit = digit;
                             this.tick_history = [...this.tick_history.slice(-MAX_TICKS + 1), digit];
                             this._tick_prices = [...this._tick_prices.slice(-MAX_TICKS + 1), Number(data.tick.quote)];
+                            
+                            if (this.is_differs_v2_mode && !this.is_differs_recovery_mode && !this.is_recovery_active) {
+                                this.differs_v2_post_trade_ticks++;
+                            }
+                            
                             if (this.is_auto_running && !this.is_analyzing_volatility && !this.is_purchasing && !this.is_processing_round && this.active_contracts.size === 0) {
                                 if (this.is_rise_fall_mode) {
                                     this.analyzeAndExecuteRiseFall();
                                 } else if (this.is_differs_mode && !this.is_differs_recovery_mode && !this.is_recovery_active) {
                                     this.analyzeAndExecuteDiffers();
+                                } else if (this.is_differs_v2_mode && !this.is_differs_recovery_mode && !this.is_recovery_active) {
+                                    this.analyzeAndExecuteDiffersV2();
                                 } else {
                                     // Recovery mode: non-differs should execute immediately
-                                    if (this.is_recovery_active && !this.is_differs_mode) {
+                                    if (this.is_recovery_active && !this.is_differs_mode && !this.is_differs_v2_mode) {
                                         this.addLog(`Recovery: Executing immediately...`);
                                         this.executeTrade(this.recovery_contract_type, this.recovery_barrier);
                                     } else if (this.is_manual_mode && this.is_recovery_active) {
@@ -751,6 +769,89 @@ export default class OverUnderStore {
         }
     }
 
+    analyzeAndExecuteDiffersV2() {
+        if (this.tick_history.length < 5 || this.is_purchasing) return;
+
+        const autoSwitchOn = this.is_volatility_changer && this.is_analyzing_volatility;
+        
+        if (!autoSwitchOn && this.differs_v2_post_trade_ticks < 3) {
+            return;
+        }
+
+        const predictionInput = this.tick_history.slice(-200);
+        const prediction = predictNextDigits(predictionInput);
+        
+        if (prediction.top4Digits.length === 0) {
+            this.addLog(`DiffersV2: Insufficient data for prediction`);
+            return;
+        }
+
+        runInAction(() => { 
+            this.differs_predicted_top4 = prediction.top4Digits; 
+        });
+        this.addLog(`DiffersV2 Prediction: ${prediction.summary}`);
+
+        const predictedDigit = prediction.top4Digits[0];
+        
+        const history = this.tick_history.slice(-1000);
+        const totalTicks = history.length;
+        const digitCounts = Array(10).fill(0) as number[];
+        history.forEach(d => { if (d >= 0 && d <= 9) digitCounts[d]++; });
+
+        const digitCount = digitCounts[predictedDigit];
+        const digitPct = totalTicks > 0 ? (digitCount / totalTicks) * 100 : 0;
+
+        if (digitPct > 9.8) {
+            this.addLog(
+                `DiffersV2: SKIP digit ${predictedDigit} — too frequent (${digitPct.toFixed(1)}% in last ${totalTicks} ticks, limit 9.8%). Re-analyzing...`
+            );
+            return;
+        }
+
+        const last10 = history.slice(-10);
+        const recentCount = last10.filter(d => d === predictedDigit).length;
+
+        if (recentCount > 3) {
+            this.addLog(
+                `DiffersV2: SKIP digit ${predictedDigit} — rapidly increasing (appeared ${recentCount}x in last 10 ticks, limit 3). Re-analyzing...`
+            );
+            return;
+        }
+
+        let differsDigit: number | null = null;
+        
+        for (let d = 0; d <= 9; d++) {
+            if (!prediction.top4Digits.includes(d)) {
+                const dCount = digitCounts[d];
+                const dPct = totalTicks > 0 ? (dCount / totalTicks) * 100 : 0;
+                
+                if (dPct <= 9.8) {
+                    const dRecentCount = last10.filter(x => x === d).length;
+                    if (dRecentCount <= 3) {
+                        differsDigit = d;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (differsDigit === null) {
+            this.addLog(`DiffersV2: No suitable differs digit found. All digits either in top4 or blocked by frequency.`);
+            return;
+        }
+
+        runInAction(() => {
+            this.differs_v2_predicted_digit = predictedDigit;
+            this.differs_v2_post_trade_ticks = 0;
+        });
+
+        this.addLog(
+            `DiffersV2: PREDICTED ${predictedDigit} (${digitPct.toFixed(1)}%) → BET DIFFERS on ${differsDigit} (not in top4)`
+        );
+
+        this.executeTrade('DIGITDIFF', String(differsDigit));
+    }
+
     processRoundResults() {
         this.is_processing_round = true;
         const roundProfit = Array.from(this.contract_results.values()).reduce((sum, p) => sum + p, 0);
@@ -781,7 +882,7 @@ export default class OverUnderStore {
             this.addLog(`Loss detected. Total to recover: ${this.total_loss_to_recover.toFixed(2)}. Martingale Stake: ${this.stake}`);
             
             this.setIsRecoveryActive(true);
-            if (this.is_differs_mode) {
+            if (this.is_differs_mode || this.is_differs_v2_mode) {
                 this.is_differs_recovery_mode = true;
                 this.differs_barrier_digit = null;
                 this.addLog(`Recovery: Waiting for trigger...`);
