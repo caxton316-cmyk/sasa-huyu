@@ -73,6 +73,7 @@ export default class OverUnderStore {
     differs_v2_post_trade_ticks = 0;
     differs_v2_analysis_ready = false;
     differs_v2_5s_analysis_pending = false;
+    differs_v2_confidence_wait_start: number | null = null;
     private _tick_prices: number[] = [];
     total_loss_to_recover = 0;
     differs_digit_appearance_count = 0;
@@ -134,6 +135,7 @@ export default class OverUnderStore {
             differs_v2_post_trade_ticks: observable,
             differs_v2_analysis_ready: observable,
             differs_v2_5s_analysis_pending: observable,
+            differs_v2_confidence_wait_start: observable,
             setStake: action.bound,
             setIsRiseFallMode: action.bound,
             setIs2termMode: action.bound,
@@ -850,16 +852,36 @@ export default class OverUnderStore {
 
         const top9Digits = prediction.rankedDigits.slice(0, 9).map(d => d.digit);
         const confidence = prediction.overallConfidence;
-        const CONFIDENCE_THRESHOLD = 0.55;
+        const CONFIDENCE_THRESHOLD = 0.50;
+        const MAX_WAIT_MS = 20000;
+        
+        const now = Date.now();
+        const hasBeenWaiting = this.differs_v2_confidence_wait_start !== null;
+        const waitTime = hasBeenWaiting ? now - (this.differs_v2_confidence_wait_start || 0) : 0;
+        const forceExecute = hasBeenWaiting && waitTime >= MAX_WAIT_MS;
         
         runInAction(() => { 
             this.differs_predicted_top4 = top9Digits; 
         });
         this.addLog(`DiffersV2: Predicting next tick - top 9: [${top9Digits.join(',')}] Conf: ${(confidence * 100).toFixed(0)}%`);
 
-        if (confidence < CONFIDENCE_THRESHOLD) {
-            this.addLog(`DiffersV2: Low confidence (${(confidence * 100).toFixed(0)}% < ${CONFIDENCE_THRESHOLD * 100}%). Skipping, will re-analyze...`);
+        if (confidence < CONFIDENCE_THRESHOLD && !forceExecute) {
+            if (!hasBeenWaiting) {
+                runInAction(() => {
+                    this.differs_v2_confidence_wait_start = now;
+                });
+                this.addLog(`DiffersV2: Low confidence (${(confidence * 100).toFixed(0)}% < 50%). Waiting for better prediction...`);
+            } else {
+                this.addLog(`DiffersV2: Low confidence (${(waitTime/1000).toFixed(0)}s/${MAX_WAIT_MS/1000}s). Still analyzing...`);
+            }
             return;
+        }
+
+        if (hasBeenWaiting) {
+            this.addLog(`DiffersV2: Confidence OK (${(confidence * 100).toFixed(0)}%) or timeout reached. Executing...`);
+            runInAction(() => {
+                this.differs_v2_confidence_wait_start = null;
+            });
         }
 
         let differsDigit: number | null = null;
@@ -881,6 +903,7 @@ export default class OverUnderStore {
             this.differs_v2_post_trade_ticks = 0;
             this.differs_v2_analysis_ready = false;
             this.differs_v2_5s_analysis_pending = true;
+            this.differs_v2_confidence_wait_start = null;
         });
 
         this.addLog(`DiffersV2: Next tick prediction → DIFFER on ${differsDigit}`);
