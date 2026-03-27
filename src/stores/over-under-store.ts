@@ -884,7 +884,6 @@ export default class OverUnderStore {
             });
         }
 
-        const top9Digits = prediction.rankedDigits.slice(0, 9).map(d => d.digit);
         const predictedDigit = prediction.rankedDigits[0].digit;
         
         const last30 = this.tick_history.slice(-30);
