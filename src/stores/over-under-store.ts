@@ -306,6 +306,7 @@ export default class OverUnderStore {
                             runInAction(() => {
                                 this.differs_v2_analysis_ready = true;
                                 this.differs_v2_5s_analysis_pending = false;
+                                this.is_processing_round = false;
                             });
                             this.addLog("Differs V2: Analysis complete. Predicting & executing...");
                             this.analyzeAndExecuteDiffersV2();
@@ -432,6 +433,7 @@ export default class OverUnderStore {
                 runInAction(() => {
                     this.differs_predicted_top4 = [];
                     this.differs_v2_predicted_digit = null;
+                    this.is_processing_round = false;
                 });
                 this.addLog("Tool started. Differs V2: Analyzing historical data (5s)...");
                 
@@ -439,6 +441,7 @@ export default class OverUnderStore {
                     if (this.is_auto_running && this.is_differs_v2_mode) {
                         runInAction(() => {
                             this.differs_v2_analysis_ready = true;
+                            this.is_processing_round = false;
                         });
                         this.addLog("Differs V2: Analysis complete. Predicting & executing...");
                         this.analyzeAndExecuteDiffersV2();
@@ -895,29 +898,56 @@ export default class OverUnderStore {
         this.addLog(`Round finished. Profit: ${roundProfit.toFixed(2)}, All lost: ${all_loss}`);
 
         if (this.is_differs_v2_mode) {
+            const wasWin = !all_loss;
+            
             runInAction(() => {
                 this.differs_predicted_top4 = [];
                 this.differs_v2_predicted_digit = null;
                 this.differs_v2_analysis_ready = false;
                 this.differs_v2_5s_analysis_pending = true;
+                this.is_processing_round = false;
             });
+
+            if (wasWin) {
+                if (this.is_2term_mode) {
+                    const nextStake = Number((this.stake + roundProfit).toFixed(2));
+                    this.stake = nextStake;
+                    this.addLog(`DiffersV2: Win! 2-term ON - Stake increased to ${this.stake}`);
+                } else {
+                    this.stake = this.initial_stake;
+                    this.addLog(`DiffersV2: Win! Stake reset to ${this.stake}`);
+                }
+            } else {
+                this.stake = Number((this.stake * this.martingale).toFixed(2));
+                this.addLog(`DiffersV2: Loss! Martingale - New stake: ${this.stake}`);
+            }
+
+            this.contract_results.clear();
+            
             this.addLog(`DiffersV2: Trade settled. Re-analyzing (5s)...`);
             
             setTimeout(() => {
-                if (this.is_auto_running && this.is_differs_v2_mode && this.is_processing_round === false) {
-                    runInAction(() => {
-                        this.differs_v2_analysis_ready = true;
-                        this.differs_v2_5s_analysis_pending = false;
-                    });
-                    this.addLog(`DiffersV2: Analysis complete. Predicting & executing...`);
-                    this.analyzeAndExecuteDiffersV2();
+                if (this.is_auto_running && this.is_differs_v2_mode) {
+                    if (this.is_volatility_changer && this.is_automate) {
+                        this.addLog(`DiffersV2: Auto-switch enabled. Scanning volatility...`);
+                        this.startVolatilityAnalysis();
+                    } else {
+                        runInAction(() => {
+                            this.differs_v2_analysis_ready = true;
+                            this.differs_v2_5s_analysis_pending = false;
+                            this.is_processing_round = false;
+                        });
+                        this.addLog(`DiffersV2: Analysis complete. Predicting & executing...`);
+                        this.analyzeAndExecuteDiffersV2();
+                    }
                 }
             }, 5000);
-            
-            this.contract_results.clear();
+
             if (!this.is_turbo) {
                 this.setIsAutoRunning(false);
                 this.addLog('Turbo Mode is off. Stopping auto-run.');
+            } else {
+                this.addLog('DiffersV2: Waiting for next cycle...');
             }
             return;
         }
