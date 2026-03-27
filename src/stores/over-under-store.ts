@@ -854,7 +854,7 @@ export default class OverUnderStore {
         const confidence = prediction.overallConfidence;
         const CONFIDENCE_THRESHOLD = 0.60;
         const MAX_WAIT_MS = 20000;
-        const MAX_DIFFERS_FREQ = 5;
+        const MIN_TICKS_ABSENT = 15;
         
         const now = Date.now();
         const hasBeenWaiting = this.differs_v2_confidence_wait_start !== null;
@@ -887,27 +887,26 @@ export default class OverUnderStore {
 
         const predictedDigit = prediction.rankedDigits[0].digit;
         
-        const last30 = this.tick_history.slice(-30);
-        const freqMap = Array(10).fill(0);
-        last30.forEach(d => { if (d >= 0 && d <= 9) freqMap[d]++; });
+        const last50 = this.tick_history.slice(-50);
         
         let differsDigit: number | null = null;
-        let lowestFreq = 100;
+        let bestScore = -1;
         
         for (let d = 0; d <= 9; d++) {
-            if (!top9Digits.includes(d) && freqMap[d] <= MAX_DIFFERS_FREQ) {
-                if (freqMap[d] < lowestFreq) {
-                    lowestFreq = freqMap[d];
-                    differsDigit = d;
-                }
+            const lastAppearance = last50.lastIndexOf(d);
+            const ticksAgo = lastAppearance === -1 ? 50 : last50.length - lastAppearance;
+            
+            if (ticksAgo >= bestScore && !top9Digits.includes(d)) {
+                bestScore = ticksAgo;
+                differsDigit = d;
             }
         }
 
-        if (differsDigit === null) {
-            this.addLog(`DiffersV2: All non-predicted digits appearing too often (>${MAX_DIFFERS_FREQ}x). Skipping...`);
+        if (differsDigit === null || bestScore < MIN_TICKS_ABSENT) {
+            this.addLog(`DiffersV2: No digit absent for ${MIN_TICKS_ABSENT}+ ticks. Skipping...`);
             return;
         }
-        
+
         runInAction(() => {
             this.differs_v2_predicted_digit = predictedDigit;
             this.differs_v2_post_trade_ticks = 0;
@@ -916,7 +915,7 @@ export default class OverUnderStore {
             this.differs_v2_confidence_wait_start = null;
         });
 
-        this.addLog(`DiffersV2: Predict top 9 [${top9Digits.join(',')}] → DIFFER on ${differsDigit} (win if any top 9 appears)`);
+        this.addLog(`DiffersV2: Digit ${differsDigit} absent for ${bestScore} ticks → DIFFER on ${differsDigit}`);
 
         this.executeTrade('DIGITDIFF', String(differsDigit));
     }
