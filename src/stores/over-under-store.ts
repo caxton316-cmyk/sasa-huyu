@@ -852,8 +852,9 @@ export default class OverUnderStore {
 
         const top9Digits = prediction.rankedDigits.slice(0, 9).map(d => d.digit);
         const confidence = prediction.overallConfidence;
-        const CONFIDENCE_THRESHOLD = 0.50;
+        const CONFIDENCE_THRESHOLD = 0.60;
         const MAX_WAIT_MS = 20000;
+        const MAX_DIFFERS_FREQ = 5;
         
         const now = Date.now();
         const hasBeenWaiting = this.differs_v2_confidence_wait_start !== null;
@@ -894,7 +895,7 @@ export default class OverUnderStore {
         let lowestFreq = 100;
         
         for (let d = 0; d <= 9; d++) {
-            if (!top9Digits.includes(d)) {
+            if (!top9Digits.includes(d) && freqMap[d] <= MAX_DIFFERS_FREQ) {
                 if (freqMap[d] < lowestFreq) {
                     lowestFreq = freqMap[d];
                     differsDigit = d;
@@ -903,10 +904,12 @@ export default class OverUnderStore {
         }
 
         if (differsDigit === null) {
-            this.addLog(`DiffersV2: Error - no differs digit found`);
+            this.addLog(`DiffersV2: All non-predicted digits appearing too often (>${MAX_DIFFERS_FREQ}x). Skipping...`);
             return;
         }
 
+        const predictedDigit = prediction.rankedDigits[0].digit;
+        
         runInAction(() => {
             this.differs_v2_predicted_digit = predictedDigit;
             this.differs_v2_post_trade_ticks = 0;
