@@ -849,17 +849,22 @@ export default class OverUnderStore {
         });
         this.addLog(`DiffersV2: Predicting next tick - top 9: [${top9Digits.join(',')}]`);
 
+        const last20 = this.tick_history.slice(-20);
+        
         let differsDigit: number | null = null;
         
         for (let d = 0; d <= 9; d++) {
             if (!top9Digits.includes(d)) {
-                differsDigit = d;
-                break;
+                const recentCount = last20.filter(x => x === d).length;
+                if (recentCount <= 2) {
+                    differsDigit = d;
+                    break;
+                }
             }
         }
 
         if (differsDigit === null) {
-            this.addLog(`DiffersV2: Error - no differs digit found`);
+            this.addLog(`DiffersV2: All non-predicted digits appearing rapidly (last 20 ticks). Re-analyzing...`);
             return;
         }
 

@@ -8,6 +8,13 @@
     }
 }
 
+// Animate tab highlight movement
+.main__container .dc-tabs__header {
+    .dc-tabs__active-line {
+        transition: left 0.3s ease-out, width 0.3s ease-out;
+    }
+}
+
 // Removed tabs-shadow to fix mobile edge fading issue
 
 .main {
