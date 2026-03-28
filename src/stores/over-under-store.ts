@@ -834,6 +834,22 @@ export default class OverUnderStore {
         const secondLastTick = history[history.length - 2];
         
         if (lastTick === secondLastTick) {
+            const barrier_digit = lastTick;
+            const history_1000 = this.tick_history.slice(-1000);
+            const totalTicks = history_1000.length;
+            const digitCounts = Array(10).fill(0);
+            history_1000.forEach(d => { if (d >= 0 && d <= 9) digitCounts[d]++; });
+
+            const digitCount = digitCounts[barrier_digit!];
+            const digitPct = totalTicks > 0 ? (digitCount / totalTicks) * 100 : 0;
+
+            if (digitPct > 10.4) {
+                this.addLog(
+                    `DiffersV2: SKIP digit ${barrier_digit} — too frequent (${digitPct.toFixed(1)}% in last ${totalTicks} ticks, limit 10.4%). Re-analyzing...`
+                );
+                return;
+            }
+
             runInAction(() => {
                 this.differs_v2_predicted_digit = lastTick;
                 this.differs_predicted_top4 = [lastTick];
