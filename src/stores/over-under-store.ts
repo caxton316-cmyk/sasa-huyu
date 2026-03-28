@@ -803,7 +803,7 @@ export default class OverUnderStore {
         const current_symbol = symbol || this.selected_symbol;
         const data = this.is_all_vol_mode ? this.symbol_data[current_symbol] : this;
 
-        if (!data || data.tick_history.length < 5 || this.is_purchasing) return;
+        if (!data || data.tick_history.length < 36 || this.is_purchasing) return;
 
         const digits = data.tick_history;
         const n = digits.length;
@@ -837,27 +837,35 @@ export default class OverUnderStore {
             const digitPct = totalTicks > 0 ? (digitCount / totalTicks) * 100 : 0;
 
             if (digitPct > 9.8) {
-                this.addLog(
-                    `Differs: SKIP digit ${rejection_digit} on ${current_symbol} — too frequent (${digitPct.toFixed(1)}% in last ${totalTicks} ticks, limit 9.8%). Re-analyzing...`
-                );
+                this.addLog(`Differs: SKIP digit ${rejection_digit} on ${current_symbol} — too frequent (${digitPct.toFixed(1)}% in last ${totalTicks} ticks, limit 9.8%). Re-analyzing...`);
                 return;
             }
 
-            const minCount = Math.min(...digitCounts.filter((_, i) => digitCounts[i] > 0));
-            if (digitCount === minCount && totalTicks > 0) {
-                this.addLog(
-                    `Differs: SKIP digit ${rejection_digit} on ${current_symbol} — least appearing digit (${digitCount} times). Re-analyzing...`
-                );
+            const minCount = Math.min(...digitCounts.filter(c => c > 0));
+            const maxCount = Math.max(...digitCounts);
+            if (digitCount === minCount || digitCount === maxCount) {
+                this.addLog(`Differs: SKIP digit ${rejection_digit} on ${current_symbol} — is most or least frequent. Re-analyzing...`);
+                return;
+            }
+
+            const getPct = (digit: number, hist: number[]) => {
+                const count = hist.filter(d => d === digit).length;
+                return (count / hist.length) * 100;
+            };
+            const old_history = data.tick_history.slice(0, -35);
+            const new_history = data.tick_history;
+            const oldPct = getPct(rejection_digit!, old_history);
+            const newPct = getPct(rejection_digit!, new_history);
+            const increase = newPct - oldPct;
+            if (increase > 0.5) {
+                this.addLog(`Differs: SKIP digit ${rejection_digit} on ${current_symbol} — rapidly increasing (+${increase.toFixed(2)}% in last 35 ticks). Re-analyzing...`);
                 return;
             }
 
             const last10 = history.slice(-10);
             const recentCount = last10.filter(d => d === rejection_digit).length;
-
             if (recentCount > 3) {
-                this.addLog(
-                    `Differs: SKIP digit ${rejection_digit} on ${current_symbol} — rapidly increasing (appeared ${recentCount}x in last 10 ticks, limit 3). Re-analyzing...`
-                );
+                this.addLog(`Differs: SKIP digit ${rejection_digit} on ${current_symbol} — appeared ${recentCount}x in last 10 ticks (limit 3). Re-analyzing...`);
                 return;
             }
 
@@ -867,20 +875,13 @@ export default class OverUnderStore {
             this.addLog(`Prediction Engine on ${current_symbol}: ${prediction.summary}`);
 
             if (prediction.top4Digits.includes(rejection_digit!)) {
-                this.addLog(
-                    `Differs: BLOCKED digit ${rejection_digit} on ${current_symbol} — prediction engine flagged it as likely to appear (top4: [${prediction.top4Digits.join(',')}]). Skipping trade.`
-                );
+                this.addLog(`Differs: BLOCKED digit ${rejection_digit} on ${current_symbol} — prediction engine flagged it as likely (top4: [${prediction.top4Digits.join(',')}]). Skipping trade.`);
                 return;
             }
 
             this.differs_barrier_digit = rejection_digit;
 
-            this.addLog(
-                `Differs: PATTERN! ${surge_count}x ${surge_direction} surge → ` +
-                `${curr_direction} reversal. Digit ${rejection_digit} on ${current_symbol} (${digitPct.toFixed(1)}%, ${recentCount}x recent). ` +
-                `Prediction engine cleared. DIFFER!`
-            );
-
+            this.addLog(`Differs: PATTERN! ${surge_count}x ${surge_direction} surge → ${curr_direction} reversal. Digit ${rejection_digit} on ${current_symbol} (${digitPct.toFixed(1)}%, ${recentCount}x recent). Prediction engine cleared. DIFFER!`);
             this.executeTrade('DIGITDIFF', String(rejection_digit), current_symbol);
         } else {
             this.addLog(`Differs on ${current_symbol}: Watching... ${surge_count}x ${surge_direction} (need 2+ consecutive)`);
@@ -891,7 +892,7 @@ export default class OverUnderStore {
         const current_symbol = symbol || this.selected_symbol;
         const data = this.is_all_vol_mode ? this.symbol_data[current_symbol] : this;
 
-        if (!data || data.tick_history.length < 5 || this.is_purchasing) return;
+        if (!data || data.tick_history.length < 36 || this.is_purchasing) return;
 
         const history = data.tick_history;
         const lastTick = data.last_digit;
@@ -907,10 +908,29 @@ export default class OverUnderStore {
             const digitCount = digitCounts[barrier_digit!];
             const digitPct = totalTicks > 0 ? (digitCount / totalTicks) * 100 : 0;
 
-            if (digitPct > 10.4) {
-                this.addLog(
-                    `DiffersV2: SKIP digit ${barrier_digit} on ${current_symbol} — too frequent (${digitPct.toFixed(1)}% in last ${totalTicks} ticks, limit 10.4%). Re-analyzing...`
-                );
+            if (digitPct > 10.3) {
+                this.addLog(`DiffersV2: SKIP digit ${barrier_digit} on ${current_symbol} — too frequent (${digitPct.toFixed(1)}% in last ${totalTicks} ticks, limit 10.3%). Re-analyzing...`);
+                return;
+            }
+
+            const minCount = Math.min(...digitCounts.filter(c => c > 0));
+            const maxCount = Math.max(...digitCounts);
+            if (digitCount === minCount || digitCount === maxCount) {
+                this.addLog(`DiffersV2: SKIP digit ${barrier_digit} on ${current_symbol} — is most or least frequent. Re-analyzing...`);
+                return;
+            }
+
+            const getPct = (digit: number, hist: number[]) => {
+                const count = hist.filter(d => d === digit).length;
+                return (count / hist.length) * 100;
+            };
+            const old_history = data.tick_history.slice(0, -35);
+            const new_history = data.tick_history;
+            const oldPct = getPct(barrier_digit!, old_history);
+            const newPct = getPct(barrier_digit!, new_history);
+            const increase = newPct - oldPct;
+            if (increase > 0.5) {
+                this.addLog(`DiffersV2: SKIP digit ${barrier_digit} on ${current_symbol} — rapidly increasing (+${increase.toFixed(2)}% in last 35 ticks). Re-analyzing...`);
                 return;
             }
 
