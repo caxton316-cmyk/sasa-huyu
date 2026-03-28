@@ -38,7 +38,7 @@ const OverUnder = observer(() => {
     const {
         connection_status, tick_history, last_digit, is_auto_running,
         stake, martingale, is_volatility_changer,
-        is_differs_mode, is_differs_v2_mode, is_all_vol_mode, is_2term_mode, is_rise_fall_mode, is_automate,
+        is_differs_mode, is_differs_v2_mode, is_tatu_bora_mode, is_all_vol_mode, is_2term_mode, is_rise_fall_mode, is_automate,
         use_second_trigger, is_manual_mode, manual_contract_type, manual_barrier,
         recovery_contract_type, recovery_barrier, use_recovery_delay, is_recovery_enabled,
         recovery_entry_digit, recovery_second_entry_digit,
@@ -46,7 +46,7 @@ const OverUnder = observer(() => {
         debug_info, is_analyzing_volatility, is_authorizing,
         differs_predicted_top4,
         setStake, setMartingale, setIsVolatilityChanger,
-        setIsDiffersMode, setIsDiffersV2Mode, setIsAllVolMode, setIs2termMode, setIsRiseFallMode, setIsAutomate,
+        setIsDiffersMode, setIsDiffersV2Mode, setIsTatuBoraMode, setIsAllVolMode, setIs2termMode, setIsRiseFallMode, setIsAutomate,
         setUseSecondTrigger, setIsManualMode, setManualContractType, setManualBarrier,
         setRecoveryContractType, setRecoveryBarrier, setUseRecoveryDelay, setIsRecoveryEnabled,
         setRecoveryEntryDigit, setRecoverySecondEntryDigit,
@@ -173,7 +173,7 @@ const OverUnder = observer(() => {
                                     { c: 'blue', t: 'Market Settings', items: ['<b>Index</b> — Volatility market to trade (10 available).', '<b>Volatility Changer</b> — Auto-scans all indices and picks the best one for your strategy.'] },
                                     { c: 'blue', t: 'Over 5 / Under 4', items: ['Fires Over 5 + Under 4 simultaneously when trigger digit appears.', '<b>2ND</b> — Two consecutive trigger digits required.', '<b>Turbo</b> — Re-fires immediately after each settled round.'] },
                                     { c: 'purple', t: 'Differs', items: ['3+ ticks in one direction → reversal tick → bot places Differs on reversal digit.', '<b>2-Term Compound</b> — Adds profit onto next stake.', '<b>Auto Cycle</b> — Loops after each round.', '<b>All Vol Mode</b> — Runs the strategy on all volatility indices at once.'] },
-                                    { c: 'pink', t: 'Differs V2', items: ['Predicts most likely 9 digit → bets DIFFER with the digit that has NOT appeared.', 'Waits 3 ticks after trade settles before predicting again.', '<b>Auto Switch ON</b> — Executes immediately on new symbol after scanning (no 3-tick wait).', '<b>All Vol Mode</b> — Runs the strategy on all volatility indices at once.'] },
+                                    { c: 'pink', t: 'Differs V2', items: ['Predicts 9 digit → bets DIFFER with the digit that has NOT appeared.', 'Waits 3 ticks after trade settles before predicting again.', '<b>Auto Switch ON</b> — Executes immediately on new symbol after scanning (no 3-tick wait).', '<b>All Vol Mode</b> — Runs the strategy on all volatility indices at once.'] },
                                     { c: 'green', t: 'Rise / Fall', items: ['MACD momentum detection on live ticks → Rise or Fall contract.'] },
                                     { c: 'orange', t: 'Manual', items: ['Choose Contract Type (Over/Under/Differs), Barrier, and Trigger Digit yourself.'] },
                                     { c: 'red', t: 'Recovery System', items: ['After a loss, Martingale stake with Recovery settings until loss is recovered.', '<b>Trigger Wait</b> — Waits for trigger before recovery trade.'] },
@@ -351,6 +351,13 @@ const OverUnder = observer(() => {
                                 <div className='ou-row-wrap'>
                                     <div className='ou-row-label'><Activity size={11} /> Options</div>
                                     <div className='ou-row-fields'>
+                                        <div className='ou-f'>
+                                            <span className='ou-fl'>Tatu Bora</span>
+                                            <div className='ou-sw-row'>
+                                                <Toggle on={is_tatu_bora_mode} onToggle={() => setIsTatuBoraMode(!is_tatu_bora_mode)} disabled={disabled} color='#ec4899' />
+                                                <span className={`ou-sw-lbl${is_tatu_bora_mode ? ' on' : ''}`} style={is_tatu_bora_mode ? { color: '#ec4899' } : {}}>{is_tatu_bora_mode ? 'ON' : 'OFF'}</span>
+                                            </div>
+                                        </div>
                                         <div className='ou-f'>
                                             <span className='ou-fl'>2-Term Compound</span>
                                             <div className='ou-sw-row'>
