@@ -205,22 +205,9 @@ const AppContent = observer(() => {
                 <div className='bot-dashboard bot' data-testid='dt_bot_dashboard'>
                     <Audio />
                     
-                    {/* UPDATED MULTI-TAB SWITCHER */}
-                    {(() => {
-                        if (store.common.active_tab === 'over_under') {
-                            return <OverUnder />;
-                        } else if (store.common.active_tab === 'makoti_magic') {
-                            return <MakotiMagic />;
-                        } else {
-                            // This is your safe zone (Main & BotBuilder)
-                            return (
-                                <>
-                                    <Main />
-                                    <BotBuilder />
-                                </>
-                            );
-                        }
-                    })()}
+                    {/* REMOVED MULTI-TAB SWITCHER */}
+                    <Main />
+                    <BotBuilder />
 
                     <BotStopped />
                     <TransactionDetailsModal />
