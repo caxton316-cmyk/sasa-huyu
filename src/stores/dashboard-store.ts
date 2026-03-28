@@ -183,6 +183,7 @@ export default class DashboardStore implements IDashboardStore {
                 }
             }
         );
+        this.setActiveTab(0);
         this.initInfoPanel();
     }
 
