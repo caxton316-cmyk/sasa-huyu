@@ -76,8 +76,8 @@
             }
 
             &__active {
-                background: #A020F0 !important; // Bright purple background for active tab
-                box-shadow: 0 0 10px #A020F0, 0 0 20px #A020F0, 0 0 30px #A020F0 !important;
+                background: linear-gradient(145deg, #007cf0, #00dfd8) !important; // Cool blue gradient for active tab
+                box-shadow: 0 0 8px rgba(0, 124, 240, 0.7), 0 0 16px rgba(0, 223, 216, 0.7) !important; // Matching cool shadow
                 color: #ffffff !important; // White text for active tab
                 position: relative;
                 border-radius: 4px !important;
@@ -104,7 +104,7 @@
             }
 
             &__list {
-                background: #BA55D3 !important; // Lighter purple background
+                background: #2a261f !important; // Goldish-brown background
                 justify-content: flex-start; // Start from left like friend's design
                 border-bottom: none !important; // Remove border
                 padding: 0; // Remove all padding to eliminate space
@@ -120,6 +120,11 @@
                     border-radius: 8px !important; // Rounded corners for all tabs
                     transition: background-color 0.2s ease !important; // Smooth transition
                     color: #ffffff !important; // White text for all navigation items
+                    border-right: 1px solid #4a4132 !important; // Boundary line between tabs
+
+                    &:last-child {
+                        border-right: none !important; // No boundary on the last tab
+                    }
                 }
 
                 // Override the default justify-content: center from tabs.scss
@@ -1003,8 +1008,8 @@
 
     // Active tab - lighter brown background with white text
     &.dc-tabs__active {
-        background: #A020F0 !important; // Bright purple background for active tab
-        box-shadow: 0 0 10px #A020F0, 0 0 20px #A020F0, 0 0 30px #A020F0 !important;
+        background: linear-gradient(145deg, #007cf0, #00dfd8) !important; // Cool blue gradient
+        box-shadow: 0 0 8px rgba(0, 124, 240, 0.7), 0 0 16px rgba(0, 223, 216, 0.7) !important; // Matching cool shadow
         color: #ffffff !important; // White text
         font-weight: bold !important;
         font-family:
@@ -1146,8 +1151,8 @@
     &.dc-tabs__active {
         color: #ffffff !important;
         font-weight: bold !important;
-        background: #A020F0 !important; // Bright purple background for active tab
-        box-shadow: 0 0 10px #A020F0, 0 0 20px #A020F0, 0 0 30px #A020F0 !important;
+        background: linear-gradient(145deg, #007cf0, #00dfd8) !important; // Cool blue gradient
+        box-shadow: 0 0 8px rgba(0, 124, 240, 0.7), 0 0 16px rgba(0, 223, 216, 0.7) !important; // Matching cool shadow
 
         span,
         div,
@@ -1207,8 +1212,8 @@ body.theme--dark .dc-tabs__item {
     &.dc-tabs__active {
         color: #ffffff !important;
         font-weight: bold !important;
-        background: #A020F0 !important; // Bright purple background for active tab
-        box-shadow: 0 0 10px #A020F0, 0 0 20px #A020F0, 0 0 30px #A020F0 !important;
+        background: linear-gradient(145deg, #007cf0, #00dfd8) !important; // Cool blue gradient
+        box-shadow: 0 0 8px rgba(0, 124, 240, 0.7), 0 0 16px rgba(0, 223, 216, 0.7) !important; // Matching cool shadow
 
         span,
         div,

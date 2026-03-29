@@ -1,67 +1,41 @@
 @use 'components/shared/styles/devices' as *;
 
+// Keyframe animation for a subtle 3D effect on the active tab
 @keyframes dc-tab-active-3d {
     0% {
-        transform: perspective(500px) rotateX(0deg) rotateY(0deg) scale(1);
+        transform: perspective(600px) rotateX(0deg) rotateY(0deg) scale(1);
         box-shadow:
-            0 3px 12px rgba(114, 47, 228, 0.55),
-            0 2px 5px rgba(0, 0, 0, 0.3),
+            0 2px 10px rgba(0, 124, 240, 0.4),
+            0 1px 3px rgba(0, 0, 0, 0.25),
+            inset 0 1px 0 rgba(255, 255, 255, 0.15),
+            inset 0 -1px 0 rgba(0, 0, 0, 0.1);
+    }
+
+    25% {
+        transform: perspective(600px) rotateX(5deg) rotateY(-5deg) scale(1.05);
+        box-shadow:
+            0 6px 20px rgba(0, 124, 240, 0.6),
+            0 3px 8px rgba(0, 0, 0, 0.3),
             inset 0 1px 0 rgba(255, 255, 255, 0.2),
             inset 0 -2px 0 rgba(0, 0, 0, 0.15);
     }
 
-    18% {
-        transform: perspective(500px) rotateX(0deg) rotateY(0deg) scale(1.1);
+    75% {
+        transform: perspective(600px) rotateX(-3deg) rotateY(3deg) scale(1.03);
         box-shadow:
-            0 10px 28px rgba(114, 47, 228, 0.85),
-            0 5px 14px rgba(0, 0, 0, 0.4),
-            inset 0 2px 0 rgba(255, 255, 255, 0.35),
-            inset 0 -3px 0 rgba(0, 0, 0, 0.2);
-    }
-
-    36% {
-        transform: perspective(500px) rotateX(14deg) rotateY(20deg) scale(1.06);
-        box-shadow:
-            6px 12px 22px rgba(114, 47, 228, 0.65),
-            2px 6px 10px rgba(0, 0, 0, 0.35),
-            inset 0 1px 0 rgba(255, 255, 255, 0.25),
-            inset 0 -2px 0 rgba(0, 0, 0, 0.15);
-    }
-
-    52% {
-        transform: perspective(500px) rotateX(-8deg) rotateY(-12deg) scale(1.04);
-        box-shadow:
-            -4px 8px 18px rgba(114, 47, 228, 0.6),
-            0 4px 10px rgba(0, 0, 0, 0.3),
-            inset 0 1px 0 rgba(255, 255, 255, 0.2),
-            inset 0 -2px 0 rgba(0, 0, 0, 0.12);
-    }
-
-    65% {
-        transform: perspective(500px) rotateX(0deg) rotateY(180deg) scale(1.07);
-        box-shadow:
-            0 8px 24px rgba(114, 47, 228, 0.78),
-            0 4px 12px rgba(0, 0, 0, 0.38),
-            inset 0 2px 0 rgba(255, 255, 255, 0.3),
-            inset 0 -3px 0 rgba(0, 0, 0, 0.18);
-    }
-
-    80% {
-        transform: perspective(500px) rotateX(0deg) rotateY(360deg) scale(1.09);
-        box-shadow:
-            0 10px 28px rgba(114, 47, 228, 0.85),
-            0 5px 14px rgba(0, 0, 0, 0.42),
-            inset 0 2px 0 rgba(255, 255, 255, 0.35),
-            inset 0 -3px 0 rgba(0, 0, 0, 0.2);
+            0 4px 15px rgba(0, 223, 216, 0.5),
+            0 2px 6px rgba(0, 0, 0, 0.28),
+            inset 0 1px 0 rgba(255, 255, 255, 0.18),
+            inset 0 -1px 0 rgba(0, 0, 0, 0.12);
     }
 
     100% {
-        transform: perspective(500px) rotateX(0deg) rotateY(360deg) scale(1);
+        transform: perspective(600px) rotateX(0deg) rotateY(0deg) scale(1);
         box-shadow:
-            0 3px 12px rgba(114, 47, 228, 0.55),
-            0 2px 5px rgba(0, 0, 0, 0.3),
-            inset 0 1px 0 rgba(255, 255, 255, 0.2),
-            inset 0 -2px 0 rgba(0, 0, 0, 0.15);
+            0 2px 10px rgba(0, 124, 240, 0.4),
+            0 1px 3px rgba(0, 0, 0, 0.25),
+            inset 0 1px 0 rgba(255, 255, 255, 0.15),
+            inset 0 -1px 0 rgba(0, 0, 0, 0.1);
     }
 }
 
@@ -82,6 +56,8 @@
         line-height: 38px;
         display: flex;
         position: relative;
+        background: #2a261f !important; // Goldish-brown background for all tab lists
+        border-bottom: 1px solid #4a4132 !important; // Consistent border
 
         @include mobile-or-tablet-screen {
             justify-content: center;
@@ -93,7 +69,7 @@
         }
 
         &--border-bottom {
-            border-bottom: 2px solid var(--general-section-1);
+            border-bottom: 1px solid #4a4132 !important; // Goldish border
         }
 
         &--top {
@@ -102,7 +78,7 @@
 
         &--bottom {
             order: 1;
-            border-top: 2px solid var(--general-section-1);
+            border-top: 1px solid #4a4132 !important; // Goldish border
         }
 
         &--center {
@@ -142,10 +118,10 @@
     &__item {
         list-style: none;
         font-size: 14px !important;
-        font-weight: 500 !important; // Medium weight for inactive tabs
+        font-weight: 500 !important;
         text-align: center;
         white-space: nowrap;
-        color: #ffffff !important; // White text for all navigation items
+        color: #e0d7c5 !important; // Light gold text for inactive tabs
         font-family:
             Arial,
             Helvetica,
@@ -155,47 +131,19 @@
             sans-serif !important;
         -webkit-touch-callout: none;
         -webkit-tap-highlight-color: transparent;
+        border-right: 1px solid #4a4132 !important; // Boundary line
 
-        // Tab text - white for all navigation items
+        &:last-child {
+            border-right: none !important; // No boundary on last tab
+        }
+
         * {
-            color: #ffffff !important;
+            color: #e0d7c5 !important;
             font-weight: 500 !important;
-            font-family:
-                Arial,
-                Helvetica,
-                -apple-system,
-                BlinkMacSystemFont,
-                'Segoe UI',
-                sans-serif !important;
         }
 
-        span,
-        div,
-        p,
-        label {
-            color: #ffffff !important;
-            font-weight: 500 !important;
-            font-family:
-                Arial,
-                Helvetica,
-                -apple-system,
-                BlinkMacSystemFont,
-                'Segoe UI',
-                sans-serif !important;
-        }
-
-        // Tab icons - light brown for all navigation items
         svg {
-            fill: #b39ddb !important; // Light purple icons - override any inline fill attributes
-        }
-
-        svg,
-        svg > path,
-        svg > g > path,
-        svg > * {
-            fill: #b39ddb !important; // Light purple icons
-            stroke: none !important;
-            filter: none !important;
+            fill: #c9b492 !important; // Medium gold icons
         }
 
         &__counter {
@@ -224,7 +172,7 @@
             position: relative;
 
             &:after {
-                border-bottom: 2px solid var(--brand-red-coral);
+                border-bottom: 2px solid #007cf0; // Cool blue underline for scrollable active
                 content: '';
                 position: absolute;
                 left: 0;
@@ -235,69 +183,18 @@
 
         &:not(.dc-tabs__active) {
             cursor: pointer;
-            color: #ffffff !important; // White text for all navigation items
-
-            // Non-active tab text - white
-            * {
-                color: #ffffff !important;
-                font-weight: 500 !important;
-                font-family:
-                    Arial,
-                    Helvetica,
-                    -apple-system,
-                    BlinkMacSystemFont,
-                    'Segoe UI',
-                    sans-serif !important;
-            }
-
-            span,
-            div,
-            p,
-            label {
-                color: #ffffff !important;
-                font-weight: 500 !important;
-                font-family:
-                    Arial,
-                    Helvetica,
-                    -apple-system,
-                    BlinkMacSystemFont,
-                    'Segoe UI',
-                    sans-serif !important;
-            }
-
-            // Non-active tab icons - light brown
-            svg {
-                fill: #b39ddb !important; // Light purple icons - override any inline fill attributes
-            }
-
-            svg,
-            svg > path,
-            svg > g > path,
-            svg > * {
-                fill: #b39ddb !important; // Light purple icons
-                stroke: none !important;
-                filter: none !important;
-            }
+            background-color: transparent !important;
 
             &:hover {
-                color: #ffffff !important; // White text
-                background: rgba(255, 255, 255, 0.1) !important; // Slight white hover on dark blue
+                color: #ffffff !important;
+                background: rgba(255, 215, 0, 0.1) !important; // Faint gold hover
 
                 * {
                     color: #ffffff !important;
-                    font-weight: 500 !important;
                 }
 
                 svg {
-                    fill: #b39ddb !important; // Light purple icons on hover
-                }
-
-                svg,
-                svg > path,
-                svg > g > path,
-                svg > * {
-                    fill: #b39ddb !important; // Light purple icons on hover                    stroke: none !important;
-                    filter: none !important;
+                    fill: #f0e68c !important; // Brighter gold icons on hover
                 }
             }
         }
@@ -309,8 +206,9 @@
 
     &__active {
         font-weight: bold !important;
-        color: #ffffff !important; // White text
-        background-color: #722fe4 !important; // Purple background for active tab
+        color: #ffffff !important; // White text for active
+        background: linear-gradient(145deg, #007cf0, #00dfd8) !important; // Cool blue gradient
+        box-shadow: 0 0 8px rgba(0, 124, 240, 0.7), 0 0 16px rgba(0, 223, 216, 0.7) !important;
         font-family:
             Arial,
             Helvetica,
@@ -322,228 +220,39 @@
         border-radius: 5px !important;
         position: relative;
         z-index: 1;
-        animation: dc-tab-active-3d 7s ease-in-out infinite !important;
+        animation: dc-tab-active-3d 6s ease-in-out infinite !important;
         transform-origin: center center !important;
         will-change: transform, box-shadow !important;
+        border-right: 1px solid #4a4132 !important; // Keep boundary consistent
 
-        // Active tab text - white and bold
         * {
             color: #ffffff !important;
             font-weight: bold !important;
-            font-family:
-                Arial,
-                Helvetica,
-                -apple-system,
-                BlinkMacSystemFont,
-                'Segoe UI',
-                sans-serif !important;
         }
 
-        span,
-        div,
-        p,
-        label {
-            color: #ffffff !important;
-            font-weight: bold !important;
-            font-family:
-                Arial,
-                Helvetica,
-                -apple-system,
-                BlinkMacSystemFont,
-                'Segoe UI',
-                sans-serif !important;
-        }
-
-        // Override any theme-based active states
-        &:hover {
-            color: #ffffff !important;
-            background-color: #4f60ae !important; // Darker purple on hover
-
-            * {
-                color: #ffffff !important;
-                font-weight: bold !important;
-            }
-
-            span,
-            div,
-            p,
-            label {
-                color: #ffffff !important;
-                font-weight: bold !important;
-            }
-        }
-
-        // Active tab icons - white
         svg {
-            fill: #ffffff !important; // White icons - override any inline fill attributes
+            fill: #ffffff !important; // White icons for active tab
         }
 
-        svg,
-        svg > path,
-        svg > g > path,
-        svg > * {
-            fill: #ffffff !important; // White icons
-            stroke: none !important;
+        &:hover {
+            background: linear-gradient(145deg, #0088ff, #00f5eb) !important; // Brighter cool gradient on hover
         }
     }
 
     &__active-line {
-        display: block;
-        position: absolute;
-
-        /* rtl:begin:ignore */
-        left: 0;
-
-        /* rtl:end:ignore */
-        height: 2px;
-        background: var(--text-prominent) !important;
-        transition: all ease-in-out 0.3s;
-
-        &--top {
-            bottom: -2px;
-        }
-
-        &--bottom {
-            top: -2px;
-        }
-
-        &--is-hidden {
-            display: none;
-        }
-
-        &--fit-content {
-            @include mobile-or-tablet-screen {
-                width: 120px;
-            }
-        }
-
-        &:not(&--header-fit-content) {
-            width: var(--tab-width);
-        }
+        display: none; // Completely remove the default active line
     }
 }
 
-// Force theme-responsive text for run panel tabs - highest specificity
+// Remove run panel overrides that conflict with the new theme
 .run-panel .dc-tabs__item,
 .run-panel .dc-tabs__active,
 .run-panel .dc-tabs__item:not(.dc-tabs__active) {
-    color: var(--text-prominent) !important;
-    font-weight: bold !important;
+    color: inherit !important;
+    font-weight: inherit !important;
 
     * {
-        color: var(--text-prominent) !important;
-        font-weight: bold !important;
-    }
-
-    span,
-    div,
-    p,
-    label {
-        color: var(--text-prominent) !important;
-        font-weight: bold !important;
-    }
-}
-
-// Specifically target non-active tabs in run panel
-.run-panel .dc-tabs__item:not(.dc-tabs__active) {
-    color: var(--text-prominent) !important;
-    font-weight: bold !important;
-
-    * {
-        color: var(--text-prominent) !important;
-        font-weight: bold !important;
-    }
-
-    span,
-    div,
-    p,
-    label {
-        color: var(--text-prominent) !important;
-        font-weight: bold !important;
-    }
-}
-
-// Specifically target ACTIVE tabs in run panel - highest priority
-.run-panel .dc-tabs__item.dc-tabs__active {
-    color: var(--text-prominent) !important;
-    font-weight: bold !important;
-
-    * {
-        color: var(--text-prominent) !important;
-        font-weight: bold !important;
-    }
-
-    span,
-    div,
-    p,
-    label {
-        color: var(--text-prominent) !important;
-        font-weight: bold !important;
-    }
-
-    // Override any active state styling
-    &:hover,
-    &:focus,
-    &:active {
-        color: var(--text-prominent) !important;
-
-        * {
-            color: var(--text-prominent) !important;
-            font-weight: bold !important;
-        }
-
-        span,
-        div,
-        p,
-        label {
-            color: var(--text-prominent) !important;
-            font-weight: bold !important;
-        }
-    }
-}
-
-// Force theme-responsive text for reset button - highest specificity
-.run-panel__footer-button,
-.run-panel__clear-button,
-.run-panel .dc-btn--secondary {
-    color: var(--text-prominent) !important;
-    font-weight: bold !important;
-
-    * {
-        color: var(--text-prominent) !important;
-        font-weight: bold !important;
-    }
-
-    .dc-btn__text,
-    .dc-btn__icon,
-    span,
-    div,
-    p,
-    label {
-        color: var(--text-prominent) !important;
-        font-weight: bold !important;
-    }
-
-    // Override all button states
-    &:hover,
-    &:focus,
-    &:active,
-    &:visited {
-        color: var(--text-prominent) !important;
-
-        * {
-            color: var(--text-prominent) !important;
-            font-weight: bold !important;
-        }
-
-        .dc-btn__text,
-        .dc-btn__icon,
-        span,
-        div,
-        p,
-        label {
-            color: var(--text-prominent) !important;
-            font-weight: bold !important;
-        }
+        color: inherit !important;
+        font-weight: inherit !important;
     }
 }
