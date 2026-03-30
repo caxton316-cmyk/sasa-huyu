@@ -93,12 +93,6 @@ export default class OverUnderStore {
 
     private symbol_locks: { [key: string]: boolean } = {};
     private is_processing_round = false;
-    
-    // Tatu Bora Recovery State
-    is_awaiting_immediate_recovery = false;
-    private last_lost_contract_digit: number | null = null;
-    private last_lost_contract_symbol: string | null = null;
-
 
     private _boundAuthHandler: (event: MessageEvent) => void;
     private _loginReaction: () => void;
@@ -154,7 +148,6 @@ export default class OverUnderStore {
             differs_v2_analysis_ready: observable,
             differs_v2_5s_analysis_pending: observable,
             differs_v2_confidence_wait_start: observable,
-            is_awaiting_immediate_recovery: observable,
             setStake: action.bound,
             setIsRiseFallMode: action.bound,
             setIs2termMode: action.bound,
@@ -670,34 +663,6 @@ export default class OverUnderStore {
                             const quote_str = tick.quote.toFixed(pip_size);
                             const digit = parseInt(quote_str.slice(-1), 10);
 
-                            // Tatu Bora Instant Recovery Logic
-                            if (
-                                this.is_awaiting_immediate_recovery &&
-                                this.is_auto_running &&
-                                !this.symbol_locks[tick_symbol] &&
-                                tick_symbol === this.last_lost_contract_symbol
-                            ) {
-                                this.is_awaiting_immediate_recovery = false; // Consume flag
-                                this.addLog(`Executing Tatu Bora immediate recovery on ${tick_symbol}.`);
-
-                                if (this.last_lost_contract_digit !== null) {
-                                    this.executeTrade('DIGITDIFF', String(this.last_lost_contract_digit), tick_symbol);
-                                    runInAction(() => {
-                                        this.is_processing_round = false;
-                                        this.differs_v2_predicted_digit = null; 
-                                    });
-                                } else {
-                                    this.addLog('Error: Cannot execute Tatu Bora recovery, predicted digit was lost.');
-                                    runInAction(() => {
-                                        this.is_processing_round = false;
-                                        this.differs_v2_predicted_digit = null;
-                                    });
-                                }
-                                this.last_lost_contract_digit = null;
-                                this.last_lost_contract_symbol = null;
-                            }
-
-
                             if (this.is_all_vol_mode) {
                                 // Defensive check to prevent crash on unexpected tick
                                 if (!this.symbol_data[tick_symbol]) {
@@ -1036,8 +1001,6 @@ export default class OverUnderStore {
     }
 
     processRoundResults() {
-        if (this.is_awaiting_immediate_recovery) return;
-
         this.is_processing_round = true;
         const roundProfit = Array.from(this.contract_results.values()).reduce((sum, p) => sum + p.profit, 0);
         const all_loss = Array.from(this.contract_results.values()).every(p => p.profit < 0);
@@ -1045,82 +1008,46 @@ export default class OverUnderStore {
         this.addLog(`Round finished. Profit: ${roundProfit.toFixed(2)}, All lost: ${all_loss}`);
 
         if (this.is_differs_v2_mode) {
-            if (all_loss) {
-                this.total_loss_to_recover += Math.abs(roundProfit);
-                if (this.is_tatu_bora_mode) {
-                    const lost_symbol = Array.from(this.contract_results.values())[0]?.symbol || this.selected_symbol;
-                    
-                    runInAction(() => {
-                        this.last_lost_contract_digit = this.differs_v2_predicted_digit;
-                        this.last_lost_contract_symbol = lost_symbol;
-                        this.is_awaiting_immediate_recovery = true;
-                        
-                        // Stake to recover the total accumulated loss. 
-                        // A DIGITDIFF contract's profit is approx. 8.5-9x the stake. We'll use a conservative
-                        // multiplier of 8.0 to ensure the stake is sufficient to recover the loss.
-                        const payout_multiplier = 8.0;
-                        const required_stake = (this.total_loss_to_recover / payout_multiplier);
-                        
-                        // Add a small buffer and round up to the nearest cent.
-                        this.stake = Math.ceil((required_stake + 0.01) * 100) / 100;
-                        this.stake = Math.max(0.35, this.stake); // Ensure minimum stake
-                    });
-                    this.addLog(`Tatu Bora: Engaging instant recovery for ${this.last_lost_contract_symbol}. Total loss: ${this.total_loss_to_recover.toFixed(2)}. New stake: ${this.stake.toFixed(2)}`);
-                    
-                } else {
+            if (this.is_tatu_bora_mode) {
+                // For Tatu Bora, the stake always resets.
+                this.stake = this.initial_stake;
+                const result_text = all_loss ? 'Loss' : 'Win';
+                this.addLog(`Tatu Bora: ${result_text}! Stake reset to initial: ${this.stake.toFixed(2)}`);
+            } else {
+                // Logic for other DiffersV2 modes (e.g., Nne Kwisha, standard double)
+                if (all_loss) {
                     this.stake = Number((this.stake * this.martingale).toFixed(2));
-                    this.addLog(`DiffersV2: Loss! Martingale - Stake: ${this.stake}`);
-                }
-            } else { // Win
-                if (this.total_loss_to_recover > 0) {
-                    // If a winning trade was a recovery trade, subtract the profit from the loss.
-                    // Note: roundProfit is the actual profit, not the full return.
-                    this.total_loss_to_recover -= roundProfit;
-                    if (this.total_loss_to_recover <= 0.01) {
-                        this.addLog(`Tatu Bora: Recovery successful! Cleared accumulated loss.`);
-                        this.total_loss_to_recover = 0;
-                        this.stake = this.initial_stake;
+                    this.addLog(`DiffersV2: Loss! Martingale - Stake: ${this.stake.toFixed(2)}`);
+                } else { // Win
+                    if (this.is_2term_mode) {
+                        const nextStake = Number((this.stake + roundProfit).toFixed(2));
+                        this.stake = nextStake;
+                        this.addLog(`DiffersV2: Win! 2-term ON - Stake: ${this.stake.toFixed(2)}`);
                     } else {
-                        // This case should not happen with the new stake logic, but as a fallback...
-                        this.addLog(`Tatu Bora: Partial recovery. Remaining loss: ${this.total_loss_to_recover.toFixed(2)}`);
-                        // Here, we should recalculate the stake for the remaining loss
-                        const payout_multiplier = 8.0;
-                        const required_stake = (this.total_loss_to_recover / payout_multiplier);
-                        this.stake = Math.ceil((required_stake + 0.01) * 100) / 100;
-                        this.stake = Math.max(0.35, this.stake);
-                        this.addLog(`Recalculating stake for remaining loss: ${this.stake.toFixed(2)}`);
+                        this.stake = this.initial_stake;
+                        this.addLog(`DiffersV2: Win! Stake reset: ${this.stake.toFixed(2)}`);
                     }
                 }
-                if (this.is_2term_mode && this.total_loss_to_recover === 0) {
-                    const nextStake = Number((this.stake + roundProfit).toFixed(2));
-                    this.stake = nextStake;
-                    this.addLog(`DiffersV2: Win! 2-term ON - Stake: ${this.stake}`);
-                } else if (this.total_loss_to_recover === 0) {
-                    this.stake = this.initial_stake;
-                    this.addLog(`DiffersV2: Win! Stake reset: ${this.stake}`);
-                }
             }
-
-            // Only clear the digit if we are NOT in an instant recovery sequence.
-            if (!this.is_awaiting_immediate_recovery) {
-                runInAction(() => {
-                    this.differs_predicted_top4 = [];
-                    this.differs_v2_predicted_digit = null;
-                    this.is_processing_round = false;
-                });
-            }
+    
+            // Common cleanup logic for all Differs V2 modes
+            runInAction(() => {
+                this.differs_predicted_top4 = [];
+                this.differs_v2_predicted_digit = null;
+                this.is_processing_round = false;
+            });
             
             this.contract_results.clear();
-
-            if (!this.is_turbo && !this.is_awaiting_immediate_recovery) {
+    
+            if (!this.is_turbo) {
                 this.setIsAutoRunning(false);
                 this.addLog('DiffersV2: Turbo Mode is off. Stopping auto-run.');
                 return;
             }
             
-            if (this.is_volatility_changer && this.is_automate && !this.is_awaiting_immediate_recovery) {
+            if (this.is_volatility_changer && this.is_automate) {
                 this.startVolatilityAnalysis();
-            } else if (!this.is_awaiting_immediate_recovery) {
+            } else {
                 this.addLog(`DiffersV2: Looking for next trigger...`);
             }
             return;
