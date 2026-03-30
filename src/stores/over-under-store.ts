@@ -1,3 +1,4 @@
+
 import { action, makeObservable, observable, reaction, runInAction } from 'mobx';
 import { TStores } from '@/types/stores.types';
 import RootStore from './root-store';
@@ -65,7 +66,7 @@ export default class OverUnderStore {
     is_turbo = false;
     selected_symbol = 'R_100';
     active_contracts: Set<string> = new Set();
-    contract_results: Map<string, number> = new Map();
+    contract_results: Map<string, { profit: number, symbol: string }> = new Map();
     active_subscription_id: string | null = null;
     differs_barrier_digit: number | null = null;
     is_differs_recovery_mode = false;
@@ -92,7 +93,12 @@ export default class OverUnderStore {
 
     private is_purchasing = false;
     private is_processing_round = false;
+    
+    // Tatu Bora Recovery State
     is_awaiting_immediate_recovery = false;
+    private last_lost_contract_digit: number | null = null;
+    private last_lost_contract_symbol: string | null = null;
+
 
     private _boundAuthHandler: (event: MessageEvent) => void;
     private _loginReaction: () => void;
@@ -641,10 +647,13 @@ export default class OverUnderStore {
                                 const contract_id = String(contract.contract_id);
                                 if (this.active_contracts.has(contract_id)) {
                                     const profit = contract.profit;
-                                    this.contract_results.set(contract_id, profit);
-                                    this.addLog(`Trade Result [${contract_id}]: ${profit >= 0 ? 'WON' : 'LOST'} ($${profit})`);
+                                    const symbol = contract.underlying;
+                                    this.contract_results.set(contract_id, { profit, symbol });
+                                    this.addLog(`Trade Result [${contract_id}] on ${symbol}: ${profit >= 0 ? 'WON' : 'LOST'} ($${profit})`);
                                     this.active_contracts.delete(contract_id);
-                                    if (this.active_contracts.size === 0 && !this.is_processing_round) this.processRoundResults();
+                                    if (this.active_contracts.size === 0 && !this.is_processing_round) {
+                                        this.processRoundResults();
+                                    }
                                 }
                             }
                             break;
@@ -655,17 +664,33 @@ export default class OverUnderStore {
                             const quote_str = tick.quote.toFixed(pip_size);
                             const digit = parseInt(quote_str.slice(-1), 10);
 
-                            if (this.is_awaiting_immediate_recovery && this.is_auto_running && !this.is_purchasing) {
+                            // Tatu Bora Instant Recovery Logic
+                            if (
+                                this.is_awaiting_immediate_recovery &&
+                                this.is_auto_running &&
+                                !this.is_purchasing &&
+                                symbol === this.last_lost_contract_symbol
+                            ) {
                                 this.is_awaiting_immediate_recovery = false; // Consume flag
-                                this.addLog(`Executing Tatu Bora immediate recovery trade.`);
-                                if (this.differs_v2_predicted_digit !== null) {
-                                    this.executeTrade('DIGITDIFF', String(this.differs_v2_predicted_digit));
-                                    this.is_processing_round = false; 
+                                this.addLog(`Executing Tatu Bora immediate recovery on ${symbol}.`);
+
+                                if (this.last_lost_contract_digit !== null) {
+                                    this.executeTrade('DIGITDIFF', String(this.last_lost_contract_digit), symbol);
+                                    runInAction(() => {
+                                        this.is_processing_round = false;
+                                        this.differs_v2_predicted_digit = null; 
+                                    });
                                 } else {
-                                    this.addLog('Error: Cannot execute Tatu Bora recovery, predicted digit is lost.');
-                                    this.is_processing_round = false;
+                                    this.addLog('Error: Cannot execute Tatu Bora recovery, predicted digit was lost.');
+                                    runInAction(() => {
+                                        this.is_processing_round = false;
+                                        this.differs_v2_predicted_digit = null;
+                                    });
                                 }
+                                this.last_lost_contract_digit = null;
+                                this.last_lost_contract_symbol = null;
                             }
+
 
                             if (this.is_all_vol_mode) {
                                 // Defensive check to prevent crash on unexpected tick
@@ -1008,9 +1033,11 @@ export default class OverUnderStore {
     }
 
     processRoundResults() {
+        if (this.is_awaiting_immediate_recovery) return;
+
         this.is_processing_round = true;
-        const roundProfit = Array.from(this.contract_results.values()).reduce((sum, p) => sum + p, 0);
-        const all_loss = Array.from(this.contract_results.values()).every(p => p < 0);
+        const roundProfit = Array.from(this.contract_results.values()).reduce((sum, p) => sum + p.profit, 0);
+        const all_loss = Array.from(this.contract_results.values()).every(p => p.profit < 0);
         
         this.addLog(`Round finished. Profit: ${roundProfit.toFixed(2)}, All lost: ${all_loss}`);
 
@@ -1018,10 +1045,19 @@ export default class OverUnderStore {
             if (all_loss) {
                 this.total_loss_to_recover += Math.abs(roundProfit);
                 if (this.is_tatu_bora_mode) {
-                    const new_stake = (this.total_loss_to_recover / 8.5) + 0.01;
-                    this.stake = Math.max(0.35, parseFloat(new_stake.toFixed(2)));
-                    this.addLog(`Tatu Bora: Engaging instant recovery. New stake: ${this.stake}`);
-                    this.is_awaiting_immediate_recovery = true;
+                    const lost_symbol = Array.from(this.contract_results.values())[0]?.symbol || this.selected_symbol;
+                    
+                    runInAction(() => {
+                        this.last_lost_contract_digit = this.differs_v2_predicted_digit;
+                        this.last_lost_contract_symbol = lost_symbol;
+                        this.is_awaiting_immediate_recovery = true;
+                        
+                        // Stake to recover the total accumulated loss. Payout is ~8.2-9x, use 8.2 for safety.
+                        const new_stake = (this.total_loss_to_recover / 8.2) + 0.02;
+                        this.stake = Math.max(0.35, parseFloat(new_stake.toFixed(2)));
+                    });
+                    this.addLog(`Tatu Bora: Engaging instant recovery for ${this.last_lost_contract_symbol}. New stake: ${this.stake}`);
+                    
                 } else {
                     this.stake = Number((this.stake * this.martingale).toFixed(2));
                     this.addLog(`DiffersV2: Loss! Martingale - Stake: ${this.stake}`);
@@ -1041,13 +1077,15 @@ export default class OverUnderStore {
                 }
             }
 
-            runInAction(() => {
-                this.differs_predicted_top4 = [];
-                this.differs_v2_predicted_digit = null;
-                if (!this.is_awaiting_immediate_recovery) {
+            // Only clear the digit if we are NOT in an instant recovery sequence.
+            if (!this.is_awaiting_immediate_recovery) {
+                runInAction(() => {
+                    this.differs_predicted_top4 = [];
+                    this.differs_v2_predicted_digit = null;
                     this.is_processing_round = false;
-                }
-            });
+                });
+            }
+            
             this.contract_results.clear();
 
             if (!this.is_turbo && !this.is_awaiting_immediate_recovery) {
@@ -1056,7 +1094,7 @@ export default class OverUnderStore {
                 return;
             }
             
-            if (this.is_volatility_changer && this.is_automate) {
+            if (this.is_volatility_changer && this.is_automate && !this.is_awaiting_immediate_recovery) {
                 this.startVolatilityAnalysis();
             } else if (!this.is_awaiting_immediate_recovery) {
                 this.addLog(`DiffersV2: Looking for next trigger...`);
@@ -1119,15 +1157,12 @@ export default class OverUnderStore {
                     this.addLog(`Recovery in progress. Remaining loss: ${this.total_loss_to_recover.toFixed(2)}. Continuing with stake: ${this.stake}`);
                 }
             } else {
-                // Normal win logic - only apply 2-term if button is ON
-                // This applies to ALL strategies (differs, manual, and multi-trade like O5/U4)
                 if (this.is_2term_mode) {
                     const nextStake = Number((this.stake + roundProfit).toFixed(2));
                     this.addLog(`2term Applied: Stake updated with profit ${roundProfit.toFixed(2)}. New stake: ${nextStake}`);
                     this.stake = nextStake;
                     this.addLog(`Win detected. 2-term mode is ON, stake increased to: ${this.stake}`);
                 } else {
-                    // 2-term is OFF: Always reset to initial stake
                     this.stake = this.initial_stake;
                     this.addLog(`Win detected. 2-term mode is OFF, resetting to initial stake: ${this.stake}`);
                 }
@@ -1149,8 +1184,8 @@ export default class OverUnderStore {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !is_logged_in) return;
         this.is_purchasing = true;
         this._armPurchaseTimeout();
-        // Use initial_stake for recovery trades, otherwise use current stake
-        const tradeAmount = this.is_recovery_active ? Number(this.initial_stake) : Number(this.stake);
+        
+        const tradeAmount = Number(this.stake);
         const tradeSymbol = symbol || this.selected_symbol;
         this.addLog(`Trade: ${contract_type} ${barrier} on ${tradeSymbol} @ ${tradeAmount}`);
         this.ws.send(JSON.stringify({ buy: 1, price: tradeAmount, parameters: { amount: tradeAmount, basis: 'stake', currency: 'USD', duration: 1, duration_unit: 't', symbol: tradeSymbol, contract_type, barrier } }));
@@ -1162,8 +1197,7 @@ export default class OverUnderStore {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !is_logged_in) return;
         this.is_purchasing = true;
         this._armPurchaseTimeout();
-        // Use initial_stake for recovery trades, otherwise use current stake
-        const tradeAmount = this.is_recovery_active ? Number(this.initial_stake) : Number(this.stake);
+        const tradeAmount = Number(this.stake);
         this.addLog(`Trade: O5/U4 @ ${tradeAmount}`);
         const baseParams = { amount: tradeAmount, basis: 'stake', currency: 'USD', duration: 1, duration_unit: 't', symbol: this.selected_symbol };
         this.ws.send(JSON.stringify({ buy: 1, price: tradeAmount, parameters: { ...baseParams, contract_type: 'DIGITOVER', barrier: '5' } }));
