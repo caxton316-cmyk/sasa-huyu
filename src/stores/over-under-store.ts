@@ -1210,11 +1210,56 @@ export default class OverUnderStore {
         if (this.symbol_locks[tradeSymbol]) return;
 
         if (this.is_digit_occurrence_filter_active) {
-            const history = data.tick_history.slice(-100);
-            const losing_digits_count = history.filter(d => d === 4 || d === 5).length;
-            const occurrence_percentage = (losing_digits_count / history.length) * 100;
-            if (occurrence_percentage > 25) {
-                this.addLog(`Trade on ${tradeSymbol} skipped. Losing digits (4,5) occurred ${occurrence_percentage.toFixed(1)}% in last 100 ticks.`);
+            const history_100 = data.tick_history.slice(-100);
+            if (history_100.length > 0) {
+                const losing_digits_count = history_100.filter(d => d === 4 || d === 5).length;
+                const occurrence_percentage = (losing_digits_count / history_100.length) * 100;
+                if (occurrence_percentage > 25) {
+                    this.addLog(`Trade on ${tradeSymbol} skipped. Losing digits (4,5) occurred ${occurrence_percentage.toFixed(1)}% in last 100 ticks.`);
+                    return;
+                }
+            }
+
+            const history_1000 = data.tick_history; // Full history up to 1000
+            if (history_1000.length > 0) {
+                const count4 = history_1000.filter(d => d === 4).length;
+                const count5 = history_1000.filter(d => d === 5).length;
+                const pct4 = (count4 / history_1000.length) * 100;
+                const pct5 = (count5 / history_1000.length) * 100;
+
+                if (pct4 > 10.2) {
+                    this.addLog(`Trade on ${tradeSymbol} skipped. Digit 4 is too frequent (${pct4.toFixed(1)}% in last 1000 ticks).`);
+                    return;
+                }
+                if (pct5 > 10.2) {
+                    this.addLog(`Trade on ${tradeSymbol} skipped. Digit 5 is too frequent (${pct5.toFixed(1)}% in last 1000 ticks).`);
+                    return;
+                }
+            }
+
+            const getPct = (digit: number, hist: number[]) => {
+                if (hist.length === 0) return 0;
+                const count = hist.filter(d => d === digit).length;
+                return (count / hist.length) * 100;
+            };
+            const old_history = data.tick_history.slice(0, -35);
+            const new_history = data.tick_history;
+
+            const oldPct4 = getPct(4, old_history);
+            const newPct4 = getPct(4, new_history);
+            const increase4 = newPct4 - oldPct4;
+
+            if (increase4 > 0.5) {
+                this.addLog(`Trade on ${tradeSymbol} skipped. Digit 4 is rapidly increasing (+${increase4.toFixed(2)}%).`);
+                return;
+            }
+
+            const oldPct5 = getPct(5, old_history);
+            const newPct5 = getPct(5, new_history);
+            const increase5 = newPct5 - oldPct5;
+
+            if (increase5 > 0.5) {
+                this.addLog(`Trade on ${tradeSymbol} skipped. Digit 5 is rapidly increasing (+${increase5.toFixed(2)}%).`);
                 return;
             }
         }
