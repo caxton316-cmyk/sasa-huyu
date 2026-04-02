@@ -1,4 +1,4 @@
-
+'''
 import { action, makeObservable, observable, reaction, runInAction } from 'mobx';
 import { TStores } from '@/types/stores.types';
 import RootStore from './root-store';
@@ -94,7 +94,7 @@ export default class OverUnderStore {
     private symbol_locks: { [key: string]: boolean } = {};
     private is_processing_round = false;
     private is_purchasing = false;
-    private pending_instant_result_check: { [symbol: string]: { barrier: string, stake: number, contract_type: string } } = {};
+    private pending_instant_result_check: { [symbol: string]: { barrier: string, stake: number, contract_type: string, ticks_to_check: number } } = {};
 
     // New feature flags
     is_digit_occurrence_filter_active = false;
@@ -705,24 +705,34 @@ export default class OverUnderStore {
                             if (pending_check) {
                                 const last_digit_for_check = this.is_all_vol_mode ? this.symbol_data[tick_symbol].last_digit : this.last_digit;
                                 const barrier = pending_check.barrier;
-
+                            
+                                let is_loss = false;
                                 if (String(last_digit_for_check) === barrier) {
+                                    is_loss = true;
+                                }
+                            
+                                if (is_loss) {
                                     // INSTANT LOSS
                                     this.addLog(`⚡ Instant Result on ${tick_symbol}: LOST (Digit: ${last_digit_for_check}, Barrier: ${barrier})`);
                                     const next_stake = Number((pending_check.stake * this.martingale).toFixed(2));
                                     this.addLog(`⚡ Fast Recovery on ${tick_symbol}: Martingale triggered. New stake: ${next_stake}`);
-
+                            
                                     // Immediately set up the check for the *next* trade, then execute it.
-                                    this.pending_instant_result_check[tick_symbol] = { ...pending_check, stake: next_stake };
+                                    this.pending_instant_result_check[tick_symbol] = { ...pending_check, stake: next_stake, ticks_to_check: 2 };
                                     this.executeTrade(pending_check.contract_type, barrier, tick_symbol, next_stake, true);
                                 } else {
-                                    // INSTANT WIN
-                                    this.addLog(`⚡ Instant Result on ${tick_symbol}: WON (Digit: ${last_digit_for_check}, Barrier: ${barrier})`);
-                                     if (!this.is_2term_mode) {
-                                        this.stake = this.initial_stake;
-                                        this.addLog(`⚡ Stake reset to initial: ${this.initial_stake}`)
+                                    pending_check.ticks_to_check--;
+                                    if (pending_check.ticks_to_check <= 0) {
+                                        // INSTANT WIN
+                                        this.addLog(`⚡ Instant Result on ${tick_symbol}: WON (Digit: ${last_digit_for_check}, Barrier: ${barrier})`);
+                                         if (!this.is_2term_mode) {
+                                            this.stake = this.initial_stake;
+                                            this.addLog(`⚡ Stake reset to initial: ${this.initial_stake}`)
+                                        }
+                                        delete this.pending_instant_result_check[tick_symbol];
+                                    } else {
+                                        this.addLog(`⚡ Instant Result on ${tick_symbol}: Tick ${last_digit_for_check} is not a loss. Waiting for ${pending_check.ticks_to_check} more ticks.`);
                                     }
-                                    delete this.pending_instant_result_check[tick_symbol];
                                 }
                                 return; // IMPORTANT: Stop further processing of this tick to avoid conflicts.
                             }
@@ -969,7 +979,7 @@ export default class OverUnderStore {
 
     executeDiffersV2Trade(contract_type: string, barrier: string, symbol: string, stake: number) {
         // Set up the instant check for the fast recovery system.
-        this.pending_instant_result_check[symbol] = { barrier, stake, contract_type };
+        this.pending_instant_result_check[symbol] = { barrier, stake, contract_type, ticks_to_check: 2 };
         this.executeTrade(contract_type, barrier, symbol, stake);
     }
     
@@ -1289,3 +1299,4 @@ export default class OverUnderStore {
         this.volatilityAnalyzer?.terminate();
     }
 }
+''
