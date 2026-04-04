@@ -84,7 +84,7 @@
     left: 50%;
     transform: translate(-50%, -50%) scale(1);
     z-index: 10;
-    animation: dolly-in 10s ease-out forwards, logo-glitch 3.5s infinite alternate;
+    animation: dolly-in 8s ease-out forwards, logo-glitch 3.5s infinite alternate;
     animation-delay: 1.5s;
     opacity: 0; /* Starts invisible */
     display: flex;
@@ -187,7 +187,7 @@
         opacity: 1;
     }
     to {
-        transform: translate(-50%, -50%) scale(1.08);
+        transform: translate(-50%, -50%) scale(1.05);
         opacity: 1;
     }
 }

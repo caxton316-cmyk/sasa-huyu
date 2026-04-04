@@ -348,6 +348,7 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
         const search_params = new URLSearchParams(window.location.search);
         search_params.set('account', account_param);
         window.history.pushState({}, '', `${window.location.pathname}?${search_params.toString()}`);
+        window.location.reload();
     };
 
     return (
