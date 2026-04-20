@@ -73,6 +73,7 @@ const OverUnder = observer(() => {
         recovery_entry_digit, recovery_second_entry_digit,
         is_turbo, selected_symbol, debug_info, is_analyzing_volatility, is_authorizing,
         differs_predicted_top4, is_digit_occurrence_filter_active, is_rebounce_active,
+        is_trigger_enabled,
         setStake, setMartingale, setIsVolatilityChanger,
         setIsDiffersMode, setIsDiffersV2Mode, setIsTatuBoraMode, setIsNneKwishaMode, setIsAllVolMode, setIs2termMode, setIsRiseFallMode, setIsAutomate,
         setUseSecondTrigger, setIsManualMode, setManualContractType, setManualBarrier, setManualDuration,
@@ -80,6 +81,7 @@ const OverUnder = observer(() => {
         setRecoveryEntryDigit, setRecoverySecondEntryDigit,
         setIsTurbo, setSelectedSymbol, connectWebSocket, handleStartStop, clearDebug,
         setIsDigitOccurrenceFilterActive, setIsRebounceActive,
+        setIsTriggerEnabled,
     } = over_under;
 
     const [showGuide, setShowGuide] = useState(false);
@@ -313,14 +315,19 @@ const OverUnder = observer(() => {
                                  <div className='ou-row-label'><Zap size={11} /> Trigger</div>
                                  <div className='ou-row-fields'>
                                      <div className='ou-f'>
-                                         <span className='ou-fl'>Digit</span>
+                                         <span className='ou-fl'>Digit Trigger</span>
                                          <div className='ou-trig-row'>
-                                             <TriggerInput field='primary' over_under={over_under} disabled={disabled} />
-                                             {use_second_trigger && <TriggerInput field='secondary' over_under={over_under} disabled={disabled} />}
-                                             <button className={`ou-chip${use_second_trigger ? ' on' : ''}`}
-                                                 onClick={() => setUseSecondTrigger(!use_second_trigger)} disabled={disabled}>
-                                                 2ND
-                                             </button>
+                                             <Toggle on={is_trigger_enabled} onToggle={() => setIsTriggerEnabled(!is_trigger_enabled)} disabled={disabled} />
+                                             {is_trigger_enabled && (
+                                                 <>
+                                                     <TriggerInput field='primary' over_under={over_under} disabled={disabled} />
+                                                     {use_second_trigger && <TriggerInput field='secondary' over_under={over_under} disabled={disabled} />}
+                                                     <button className={`ou-chip${use_second_trigger ? ' on' : ''}`}
+                                                         onClick={() => setUseSecondTrigger(!use_second_trigger)} disabled={disabled}>
+                                                         2ND
+                                                     </button>
+                                                 </>
+                                             )}
                                          </div>
                                      </div>
                                      <div className='ou-f'>
@@ -460,17 +467,29 @@ const OverUnder = observer(() => {
                                             <input className='ou-inp' type='number' min='1' max='10'
                                                 value={manual_duration} onChange={e => setManualDuration(Number(e.target.value))} disabled={disabled} />
                                         </div>
-                                        <div className='ou-f'>
-                                            <span className='ou-fl'>Trigger</span>
-                                            <div className='ou-trig-row'>
-                                               <TriggerInput field='primary' over_under={over_under} disabled={disabled} />
-                                                {use_second_trigger && <TriggerInput field='secondary' over_under={over_under} disabled={disabled} />}
-                                                <button className={`ou-chip${use_second_trigger ? ' on' : ''}`}
-                                                    onClick={() => setUseSecondTrigger(!use_second_trigger)} disabled={disabled}>
-                                                    2ND
-                                                </button>
-                                            </div>
-                                        </div>
+                                         <div className='ou-f'>
+                                             <span className='ou-fl'>Digit Trigger</span>
+                                             <div className='ou-trig-row'>
+                                                <Toggle on={is_trigger_enabled} onToggle={() => setIsTriggerEnabled(!is_trigger_enabled)} disabled={disabled} />
+                                                {is_trigger_enabled && (
+                                                    <>
+                                                        <TriggerInput field='primary' over_under={over_under} disabled={disabled} />
+                                                        {use_second_trigger && <TriggerInput field='secondary' over_under={over_under} disabled={disabled} />}
+                                                        <button className={`ou-chip${use_second_trigger ? ' on' : ''}`}
+                                                            onClick={() => setUseSecondTrigger(!use_second_trigger)} disabled={disabled}>
+                                                            2ND
+                                                        </button>
+                                                    </>
+                                                )}
+                                             </div>
+                                         </div>
+                                         <div className='ou-f'>
+                                             <span className='ou-fl'>All Vol Mode</span>
+                                             <div className='ou-sw-row'>
+                                                 <Toggle on={is_all_vol_mode} onToggle={() => setIsAllVolMode(!is_all_vol_mode)} disabled={disabled} />
+                                                 <span className={`ou-sw-lbl${is_all_vol_mode ? ' on' : ''}`}>{is_all_vol_mode ? 'ON' : 'OFF'}</span>
+                                             </div>
+                                         </div>
                                         <div className='ou-f ou-f--grow'>
                                             <span className='ou-fl'>AI Scan</span>
                                             <motion.button 

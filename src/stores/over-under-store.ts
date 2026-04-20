@@ -49,6 +49,7 @@ export default class OverUnderStore {
     is_tatu_bora_mode = false;
     is_nne_kwisha_mode = false;
     is_all_vol_mode = false;
+    is_trigger_enabled = true;
     is_automate = false;
     use_second_trigger = true;
     is_manual_mode = false;
@@ -155,6 +156,7 @@ export default class OverUnderStore {
             is_tatu_bora_mode: observable,
             is_nne_kwisha_mode: observable,
             is_all_vol_mode: observable,
+            is_trigger_enabled: observable,
             differs_predicted_top4: observable,
             differs_v2_predicted_digit: observable,
             differs_v2_post_trade_ticks: observable,
@@ -176,6 +178,7 @@ export default class OverUnderStore {
             setIsTatuBoraMode: action.bound,
             setIsNneKwishaMode: action.bound,
             setIsAllVolMode: action.bound,
+            setIsTriggerEnabled: action.bound,
             setIsAutomate: action.bound,
             setUseSecondTrigger: action.bound,
             setIsManualMode: action.bound,
@@ -408,6 +411,8 @@ export default class OverUnderStore {
         }
     }
 
+    setIsTriggerEnabled(value: boolean) { this.is_trigger_enabled = value; }
+
     setIs2termMode(value: boolean) { this.is_2term_mode = value; }
     setIsRiseFallMode(value: boolean) { this.is_rise_fall_mode = value; }
     setIsAutomate(value: boolean) { this.is_automate = value; }
@@ -423,8 +428,16 @@ export default class OverUnderStore {
     setUseRecoveryDelay(value: boolean) { this.use_recovery_delay = value; }
     setRecoveryEntryDigit(digit: number) { this.recovery_entry_digit = digit; }
     setRecoverySecondEntryDigit(digit: number) { this.recovery_second_entry_digit = digit; }
-    setEntryDigit(digit: number) { this.entry_digit = digit; }
-    setSecondEntryDigit(digit: number) { this.second_entry_digit = digit; }
+    setEntryDigit(digit: number) { 
+        runInAction(() => {
+            this.entry_digit = digit; 
+        });
+    }
+    setSecondEntryDigit(digit: number) { 
+        runInAction(() => {
+            this.second_entry_digit = digit; 
+        });
+    }
     setIsTurbo(is_turbo: boolean) { this.is_turbo = is_turbo; }
     setIsDigitOccurrenceFilterActive(value: boolean) { this.is_digit_occurrence_filter_active = value; }
     setIsRebounceActive(value: boolean) { this.is_rebounce_active = value; }
@@ -805,7 +818,9 @@ export default class OverUnderStore {
                                         this.analyzeAndExecuteDiffers(active_symbol);
                                     } else if (this.is_differs_v2_mode) {
                                         this.analyzeAndExecuteDiffersV2(active_symbol);
-                                    } else if (!this.is_rise_fall_mode && !this.is_manual_mode) {
+                                    } else if (this.is_manual_mode) {
+                                        this.handleOverUnderLogic(symbol_data);
+                                    } else if (!this.is_rise_fall_mode) {
                                         this.handleOverUnderLogic(symbol_data);
                                     }
                                 } else {
@@ -842,6 +857,21 @@ export default class OverUnderStore {
         const symbol = this.is_all_vol_mode && symbol_data ? Object.keys(this.symbol_data).find(key => this.symbol_data[key] === data) : this.selected_symbol;
     
         if (!symbol) return;
+
+        if (!this.is_trigger_enabled) {
+            if (this.is_manual_mode) {
+                this.addLog(`Trigger: Manual ${this.manual_contract_type} ${this.manual_barrier} on ${symbol} (No trigger digit)`);
+                this.executeTrade(this.manual_contract_type, this.manual_barrier, symbol, undefined, false, this.manual_duration);
+            } else if (this.is_differs_mode || this.is_differs_v2_mode) {
+                const barrier = String(data.last_digit);
+                this.addLog(`Trigger: Differs on ${barrier} for ${symbol} (No trigger digit)`);
+                this.executeTrade('DIGITDIFF', barrier, symbol);
+            } else {
+                this.addLog(`Trigger: O5/U4 on ${symbol} (No trigger digit)`);
+                this.executeMultiTrade(symbol);
+            }
+            return;
+        }
 
         if (this.is_rebounce_active && this.use_second_trigger) {
             if (this.rebounce_sequences[symbol]) {
@@ -946,6 +976,11 @@ export default class OverUnderStore {
         const data = this.is_all_vol_mode ? this.symbol_data[current_symbol] : this;
     
         if (!data || data.tick_history.length < 36 || this.symbol_locks[current_symbol]) return;
+
+        if (this.is_trigger_enabled) {
+            this.handleOverUnderLogic(data);
+            return;
+        }
     
         const digits = data.tick_history;
         const n = digits.length;
@@ -1044,6 +1079,11 @@ export default class OverUnderStore {
         if (this.pending_instant_result_check[current_symbol]) return;
 
         if (!data || data.tick_history.length < 4 || this.symbol_locks[current_symbol]) return;
+
+        if (this.is_trigger_enabled) {
+            this.handleOverUnderLogic(data);
+            return;
+        }
 
         const history = data.tick_history;
         const lastTick = data.last_digit;
