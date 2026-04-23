@@ -57,6 +57,7 @@ export default class OverUnderStore {
     manual_barrier = '5';
     manual_duration = 5;
     is_recovery_active = false;
+    recovery_symbol: string | null = null;
     is_recovery_enabled = false;
     recovery_contract_type = 'DIGITOVER';
     recovery_barrier = '5';
@@ -92,6 +93,10 @@ export default class OverUnderStore {
     best_score = Infinity;
     best_symbol: string | null = null;
     current_analyzing_symbol: string | null = null;
+    private analysis_pending: Set<string> = new Set();
+    private analysis_scores: Map<string, number> = new Map();
+    private analysis_momentum: Map<string, number> = new Map();
+    private analysis_strategy: string | null = null;
 
     symbol_data: { [key: string]: { tick_history: number[], last_digit: number | null, last_last_digit: number | null, _tick_prices: number[] } } = {};
 
@@ -250,20 +255,25 @@ export default class OverUnderStore {
         try {
             this.volatilityAnalyzer = new Worker(new URL('../workers/volatility-analyzer.ts', import.meta.url));
             this.volatilityAnalyzer.onmessage = (event) => {
-                const { score } = event.data;
-                const fmtScore = (s: number) => {
-                    if (!isFinite(s)) return String(s);
-                    const abs = Math.abs(s);
-                    if (abs !== 0 && abs < 0.01) return s.toExponential(3);
-                    return s.toFixed(6);
+                const { score, symbol, momentum } = event.data as {
+                    score: number; symbol?: string; momentum?: number | null;
                 };
-                this.addLog(`Analysis for ${this.current_analyzing_symbol}: Score ${fmtScore(score)}`);
+                if (!symbol) return;
+
+                this.analysis_scores.set(symbol, score);
+                if (typeof momentum === 'number' && isFinite(momentum)) {
+                    this.analysis_momentum.set(symbol, momentum);
+                }
+                this.analysis_pending.delete(symbol);
+
                 if (score < this.best_score) {
                     this.best_score = score;
-                    this.best_symbol = this.current_analyzing_symbol;
-                    this.addLog(`New best volatility: ${this.best_symbol} (Score: ${fmtScore(score)})`);
+                    this.best_symbol = symbol;
                 }
-                this.processAnalysisQueue();
+
+                if (this.analysis_pending.size === 0) {
+                    this.finalizeVolatilityAnalysis();
+                }
             };
             this.volatilityAnalyzer.onerror = (err) => {
                 this.addLog(`⚠️ Volatility worker error: ${err.message}. Aborting analysis.`);
@@ -283,75 +293,119 @@ export default class OverUnderStore {
 
     startVolatilityAnalysis() {
         if (!this.is_volatility_changer || this.is_analyzing_volatility) return;
+
+        const symbols = Object.keys(pip_sizes);
+        const strategy = this.is_differs_mode ? 'differs'
+            : this.is_differs_v2_mode ? 'differs_v2'
+            : this.is_rise_fall_mode ? 'rise_fall'
+            : this.is_manual_mode ? 'manual'
+            : 'over_under';
+
         runInAction(() => {
             this.is_analyzing_volatility = true;
-            this.analysis_queue = Object.keys(pip_sizes);
+            this.analysis_queue = [];
+            this.analysis_pending = new Set(symbols);
+            this.analysis_scores = new Map();
+            this.analysis_momentum = new Map();
+            this.analysis_strategy = strategy;
             this.best_score = Infinity;
             this.best_symbol = null;
+            this.current_analyzing_symbol = null;
         });
-        this.addLog('Volatility analysis started...');
+
+        this.addLog(`Volatility analysis started — voting across ${symbols.length} volatilities in parallel...`);
         this._armAnalysisTimeout();
-        this.processAnalysisQueue();
+
+        const sendAll = () => {
+            symbols.forEach(sym => {
+                this.ws!.send(JSON.stringify({ ticks_history: sym, count: 1000, end: 'latest', style: 'ticks' }));
+            });
+        };
+
+        if (this.ws?.readyState === WebSocket.OPEN) {
+            sendAll();
+            return;
+        }
+
+        this.addLog('⏳ Waiting for WebSocket connection...');
+        const retryDelay = 500;
+        let retryCount = 0;
+        const maxRetries = 20;
+        const waitForWs = () => {
+            retryCount++;
+            if (this.ws?.readyState === WebSocket.OPEN) {
+                this.addLog('✅ WebSocket ready, requesting all volatilities...');
+                sendAll();
+            } else if (retryCount < maxRetries) {
+                setTimeout(waitForWs, retryDelay);
+            } else {
+                this.addLog('⚠️ WS connection timeout, using default symbol R_100.');
+                runInAction(() => {
+                    this.best_symbol = 'R_100';
+                    this.best_score = 0;
+                    this.is_analyzing_volatility = false;
+                    this.analysis_pending.clear();
+                });
+                this._clearAnalysisTimeout();
+            }
+        };
+        setTimeout(waitForWs, retryDelay);
     }
 
-    processAnalysisQueue() {
-        if (this.analysis_queue.length > 0) {
-            const sym = this.analysis_queue.shift()!;
-            runInAction(() => { this.current_analyzing_symbol = sym; });
-            
-            if (this.ws?.readyState === WebSocket.OPEN) {
-                this.ws.send(JSON.stringify({ ticks_history: sym, count: 1000, end: 'latest', style: 'ticks' }));
-            } else {
-                this.addLog(`⏳ Waiting for WebSocket connection...`);
-                const retryDelay = 500;
-                let retryCount = 0;
-                const maxRetries = 20;
-                
-                const waitForWs = () => {
-                    retryCount++;
-                    if (this.ws?.readyState === WebSocket.OPEN) {
-                        this.addLog(`✅ WebSocket ready, processing ${sym}...`);
-                        this.ws.send(JSON.stringify({ ticks_history: sym, count: 1000, end: 'latest', style: 'ticks' }));
-                    } else if (retryCount < maxRetries) {
-                        setTimeout(waitForWs, retryDelay);
-                    } else {
-                        this.addLog(`⚠️ WS connection timeout for ${sym}, using default.`);
-                        runInAction(() => {
-                            this.best_symbol = 'R_100';
-                            this.best_score = 0;
-                        });
-                        this._clearAnalysisTimeout();
-                        runInAction(() => {
-                            this.is_analyzing_volatility = false;
-                            this.current_analyzing_symbol = null;
-                            this.analysis_queue = [];
-                        });
-                        this.addLog('Analysis complete. Using default symbol R_100.');
-                    }
-                };
-                
-                setTimeout(waitForWs, retryDelay);
-            }
-        } else {
-            this._clearAnalysisTimeout();
-            runInAction(() => {
-                this.is_analyzing_volatility = false;
-                this.current_analyzing_symbol = null;
+    finalizeVolatilityAnalysis() {
+        this._clearAnalysisTimeout();
+
+        // Build the percentage tally. For rise/fall we use the raw normalised
+        // momentum (longest histogram bars) so percentages are meaningful;
+        // for the others we invert the score so a lower score is a bigger
+        // share (still produces the same winner as before).
+        const entries: { symbol: string; weight: number }[] = [];
+        if (this.analysis_strategy === 'rise_fall') {
+            this.analysis_momentum.forEach((m, sym) => {
+                if (isFinite(m) && m > 0) entries.push({ symbol: sym, weight: m });
             });
-            if (this.best_symbol) {
-                this.addLog(`Analysis complete. Best volatility: ${this.best_symbol}`);
-                this.setSelectedSymbol(this.best_symbol);
-                
-                if (this.is_differs_v2_mode && this.is_auto_running) {
-                    this.addLog("Differs V2: Switched to new symbol. Looking for trigger...");
-                    return;
-                }
-            } else {
-                this.addLog('Analysis complete. No suitable volatility found.');
+        } else {
+            this.analysis_scores.forEach((s, sym) => {
+                if (!isFinite(s)) return;
+                // Invert score so lower-is-better becomes higher-is-better.
+                const w = 1 / (1 + Math.max(0, s));
+                entries.push({ symbol: sym, weight: w });
+            });
+        }
+
+        const total = entries.reduce((a, b) => a + b.weight, 0);
+        if (total > 0) {
+            entries
+                .map(e => ({ ...e, pct: (e.weight / total) * 100 }))
+                .sort((a, b) => b.pct - a.pct)
+                .forEach(e => {
+                    this.addLog(`Vote ${e.symbol}: ${e.pct.toFixed(2)}%`);
+                });
+
+            const winner = entries.reduce((a, b) => (b.weight > a.weight ? b : a));
+            const winnerPct = (winner.weight / total) * 100;
+            runInAction(() => { this.best_symbol = winner.symbol; });
+            this.addLog(`Analysis complete. Winner: ${winner.symbol} with ${winnerPct.toFixed(2)}% of the vote.`);
+        } else {
+            this.addLog('Analysis complete. No volatility produced a usable score.');
+        }
+
+        runInAction(() => {
+            this.is_analyzing_volatility = false;
+            this.current_analyzing_symbol = null;
+            this.analysis_pending.clear();
+        });
+
+        if (this.best_symbol) {
+            this.setSelectedSymbol(this.best_symbol);
+            if (this.is_differs_v2_mode && this.is_auto_running) {
+                this.addLog('Differs V2: Switched to new symbol. Looking for trigger...');
+                return;
             }
-            if (this.is_auto_running && this.is_turbo) {
-                this.addLog("Ready for next trade round.");
-            }
+        }
+
+        if (this.is_auto_running && this.is_turbo) {
+            this.addLog('Ready for next trade round.');
         }
     }
 
@@ -386,11 +440,12 @@ export default class OverUnderStore {
         if (this._analysisTimeout) clearTimeout(this._analysisTimeout);
         this._analysisTimeout = setTimeout(() => {
             if (this.is_analyzing_volatility) {
-                this.addLog('⚠️ Volatility analysis timeout — aborting analysis.');
+                this.addLog(`⚠️ Volatility analysis timeout — aborting (still missing ${this.analysis_pending.size} symbols).`);
                 runInAction(() => {
                     this.is_analyzing_volatility = false;
                     this.current_analyzing_symbol = null;
                     this.analysis_queue = [];
+                    this.analysis_pending.clear();
                 });
             }
         }, this.ANALYSIS_TIMEOUT_MS);
@@ -689,20 +744,25 @@ export default class OverUnderStore {
                                 if (digits.length > 0) this.last_digit = digits[digits.length - 1];
                                 this.addLog(`Loaded ${digits.length} historical ticks.`);
                             } else if (this.is_analyzing_volatility) {
-                                const pip_size = pip_sizes[data.echo_req.ticks_history] || 2;
+                                const sym_for_analysis: string = data.echo_req.ticks_history;
+                                if (!this.analysis_pending.has(sym_for_analysis)) break;
+                                const pip_size = pip_sizes[sym_for_analysis] || 2;
                                 const rawPrices = data.history.prices.map((p: string | number) => Number(p));
                                 const digits = rawPrices.map((p: number) => Number(p.toFixed(pip_size).slice(-1)));
-                                const strategy = this.is_differs_mode ? 'differs'
+                                const strategy = this.analysis_strategy ?? (
+                                    this.is_differs_mode ? 'differs'
                                     : this.is_differs_v2_mode ? 'differs_v2'
                                     : this.is_rise_fall_mode ? 'rise_fall'
                                     : this.is_manual_mode ? 'manual'
-                                    : 'over_under';
+                                    : 'over_under'
+                                );
                                 this.volatilityAnalyzer?.postMessage({
                                     ticks: digits,
                                     prices: rawPrices,
                                     contract_type: this.is_recovery_active ? this.recovery_contract_type : (this.is_manual_mode ? this.manual_contract_type : (this.is_differs_mode || this.is_differs_v2_mode ? 'DIGITDIFF' : 'DIGITOVER')),
                                     barrier: this.is_recovery_active ? this.recovery_barrier : (this.is_manual_mode ? this.manual_barrier : '5'),
                                     strategy,
+                                    symbol: sym_for_analysis,
                                 });
                             }
                             break;
@@ -815,6 +875,28 @@ export default class OverUnderStore {
                             const is_general_busy = this.is_analyzing_volatility || this.is_processing_round || this.active_contracts.size > 0 || this.is_purchasing;
 
                             if (this.is_auto_running && !is_general_busy) {
+                                // ── MANUAL + RECOVERY: fire IMMEDIATELY on the next tick of the
+                                // volatility the loss occurred on, ignoring trigger digits and
+                                // even when All Vol mode is on. Highest priority.
+                                if (
+                                    this.is_manual_mode &&
+                                    this.is_recovery_active &&
+                                    this.recovery_symbol &&
+                                    tick_symbol === this.recovery_symbol &&
+                                    !this.symbol_locks[tick_symbol]
+                                ) {
+                                    this.addLog(`Recovery: Immediate trade on ${tick_symbol} (${this.recovery_contract_type} ${this.recovery_barrier}) — bypassing trigger.`);
+                                    this.executeTrade(
+                                        this.recovery_contract_type,
+                                        this.recovery_barrier,
+                                        tick_symbol,
+                                        undefined,
+                                        false,
+                                        this.manual_duration,
+                                    );
+                                    return;
+                                }
+
                                 if (this.is_all_vol_mode) {
                                     const active_symbol = tick_symbol;
                                     if (this.symbol_locks[active_symbol]) return;
@@ -1268,16 +1350,17 @@ export default class OverUnderStore {
             this.is_processing_round = false;
 
             this.rise_fall_trade_count += 1;
-            if (this.is_volatility_changer && this.rise_fall_trade_count >= 3) {
+            const was_win = !all_loss;
+            if (this.is_volatility_changer && this.rise_fall_trade_count >= 3 && was_win) {
                 this.rise_fall_trade_count = 0;
-                this.addLog('Rise/Fall: 3 trades completed — re-voting best volatility...');
+                this.addLog('Rise/Fall: 3 trades reached on a WIN — re-voting best volatility...');
                 this.startVolatilityAnalysis();
+            } else if (this.is_volatility_changer && this.rise_fall_trade_count >= 3 && !was_win) {
+                this.addLog(`Rise/Fall: 3 trades reached but last was a LOSS. Holding re-analysis until next WIN.`);
+            } else if (this.is_volatility_changer) {
+                this.addLog(`Rise/Fall: Trade ${this.rise_fall_trade_count}/3 since last vote. Monitoring MACD...`);
             } else {
-                if (this.is_volatility_changer) {
-                    this.addLog(`Rise/Fall: Trade ${this.rise_fall_trade_count}/3 since last vote. Monitoring MACD...`);
-                } else {
-                    this.addLog('Rise/Fall: Monitoring MACD for next signal...');
-                }
+                this.addLog('Rise/Fall: Monitoring MACD for next signal...');
             }
             return;
         }
@@ -1285,7 +1368,12 @@ export default class OverUnderStore {
         if (all_loss) {
                 if (this.is_recovery_enabled) {
                     this.is_recovery_active = true;
-                    this.addLog(`Loss detected. Recovery System ACTIVATED.`);
+                    // Remember the symbol the loss happened on so recovery
+                    // executes on the next tick of THAT same volatility,
+                    // even when All Vol mode is on.
+                    const loss_entry = Array.from(this.contract_results.values()).find(r => r.profit < 0);
+                    this.recovery_symbol = loss_entry ? loss_entry.symbol : this.selected_symbol;
+                    this.addLog(`Loss detected on ${this.recovery_symbol}. Recovery System ACTIVATED — will fire on next tick.`);
                 } else {
                     this.addLog(`Loss detected. Standard recovery disabled for this mode.`);
                 }
@@ -1302,6 +1390,7 @@ export default class OverUnderStore {
         } else {
                 if (this.is_recovery_active) {
                     this.is_recovery_active = false;
+                    this.recovery_symbol = null;
                     this.addLog(`Win detected. Recovery System DEACTIVATED.`);
                 }
                 

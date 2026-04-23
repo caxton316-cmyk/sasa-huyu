@@ -18,7 +18,7 @@ function calcMACDHistogram(prices: number[]): number[] {
 }
 
 self.onmessage = (event) => {
-    const { ticks, prices, contract_type, barrier, strategy } = event.data;
+    const { ticks, prices, contract_type, barrier, strategy, symbol } = event.data;
 
     const calculateScore = (): number => {
         if (!ticks || ticks.length < 30) return Infinity;
@@ -132,5 +132,24 @@ self.onmessage = (event) => {
     };
 
     const score = calculateScore();
-    self.postMessage({ score });
+
+    // For rise/fall we also send back the raw average-absolute-normalised
+    // momentum so the store can express the vote as a percentage share
+    // across all volatilities.
+    let momentum: number | null = null;
+    if (strategy === 'rise_fall' && prices && prices.length >= 35) {
+        const histogram = calcMACDHistogram(prices);
+        if (histogram.length >= 15) {
+            const last15 = histogram.slice(-15);
+            const last15Prices = prices.slice(-15);
+            const avgPrice =
+                last15Prices.reduce((s: number, p: number) => s + Math.abs(p), 0) / last15Prices.length;
+            if (avgPrice && isFinite(avgPrice)) {
+                momentum =
+                    last15.reduce((sum: number, h: number) => sum + Math.abs(h), 0) / last15.length / avgPrice;
+            }
+        }
+    }
+
+    self.postMessage({ score, symbol, momentum });
 };

@@ -34,27 +34,50 @@ const Toggle = ({ on, onToggle, disabled, color = '#3b82f6' }: {
     </button>
 );
 
-// Memoize TriggerInput to prevent re-renders on every tick
-const TriggerInput = React.memo(({ field = 'primary', over_under, disabled }: {
+// Observe the store so typing into the trigger field updates immediately
+const TriggerInput = observer(({ field = 'primary', over_under, disabled }: {
     field?: 'primary' | 'secondary';
     over_under: any;
     disabled: boolean;
 }) => {
     const val = field === 'primary' ? over_under.entry_digit : over_under.second_entry_digit;
+    const [draft, setDraft] = useState<string>(String(val ?? ''));
+
+    // Keep the visible draft in sync with the store when the user is not typing
+    // (e.g. store reset, programmatic change). When the input is focused we
+    // leave the user's text alone so they can clear / overwrite freely.
+    useEffect(() => {
+        const active = document.activeElement as HTMLElement | null;
+        if (!active || active.tagName !== 'INPUT' || (active as HTMLInputElement).value !== draft) {
+            setDraft(val == null ? '' : String(val));
+        }
+    }, [val]); // eslint-disable-line react-hooks/exhaustive-deps
+
     const isLit = field === 'primary'
         ? over_under.last_digit === over_under.entry_digit
         : over_under.last_last_digit === over_under.entry_digit && over_under.last_digit === over_under.second_entry_digit;
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const raw = e.target.value;
+        setDraft(raw);
         const setter = field === 'primary' ? over_under.setEntryDigit : over_under.setSecondEntryDigit;
-        setter(Number(e.target.value));
+        if (raw === '') return; // allow the field to be temporarily empty while typing
+        const num = Number(raw);
+        if (!Number.isNaN(num) && num >= 0 && num <= 9) setter(num);
+    };
+
+    const handleBlur = () => {
+        if (draft === '' || Number.isNaN(Number(draft))) {
+            setDraft(String(val ?? 0));
+        }
     };
 
     return (
         <div className='ou-dbox'>
             <input
-                type='number' min='0' max='9' value={val}
+                type='number' min='0' max='9' value={draft}
                 onChange={handleChange}
+                onBlur={handleBlur}
                 disabled={disabled}
             />
             <span className={`ou-led ${isLit ? 'ou-led--on' : ''}`} />
