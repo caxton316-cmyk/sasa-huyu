@@ -249,9 +249,15 @@ const OverUnder = observer(() => {
         <div className='ou-root'>
 
             {/* ── GUIDE FAB ── */}
-            <button className='ou-fab' onClick={() => setShowGuide(true)}>
-                <Info size={14} /><span>Guide</span>
-            </button>
+            <motion.button
+                className='ou-fab'
+                onClick={() => setShowGuide(true)}
+                whileHover={{ scale: 1.06 }}
+                whileTap={{ scale: 0.95 }}
+            >
+                <span className='ou-fab__pulse' />
+                <Info size={17} /><span>Strategy Guide</span>
+            </motion.button>
 
             {/* ── GUIDE MODAL ── */}
             <AnimatePresence>
@@ -269,11 +275,81 @@ const OverUnder = observer(() => {
                             </div>
                             <div className='ou-modal__body'>
                                 {([
-                                    { c: 'blue', t: 'Over/Under (Default)', items: ['<b>Goal:</b> Trade on market volatility.', '<b>How it Works:</b> You set one or two trigger digits. When the last digit of the market price matches your trigger, the tool executes two trades at once: a `DIGITOVER 5` contract and a `DIGITUNDER 4` contract.', '<b>Why it Works:</b> This is a straddle strategy. You win if the last digit is over 5 or under 4. You only lose if the last digit is exactly 4 or 5.'] },
-                                    { c: 'purple', t: 'Differs', items: ['<b>Goal:</b> Identify and trade on a specific price action pattern called rejection.', '<b>How it Works:</b> The strategy looks for a surge (at least two consecutive ticks moving in the same direction) followed by a sharp reversal in the opposite direction.', '<b>Execution:</b> When this reversal happens, the strategy places a `DIGITDIFF` trade, betting that the next ticks last digit will be different from the reversal digit.', '<b>Advanced Analysis:</b> Before placing a trade, this strategy uses a prediction engine and several filters to avoid bad trades.'] },
-                                    { c: 'pink', t: 'Differs V2', items: ['<b>Goal:</b> A faster, more direct version of the Differs strategy.', '<b>How it Works:</b> Instead of looking for a complex pattern, this strategy waits for a double – two consecutive ticks with the same last digit.', '<b>Execution:</b> As soon as a double occurs, it immediately places a `DIGITDIFF` trade, betting that the next ticks last digit will be different from the double digit.', '<b>Safeguards:</b> Includes several safety checks to avoid placing risky trades, such as avoiding digits 0 and 9, and checking if the digit is too frequent.'] },
-                                    { c: 'green', t: 'Rise/Fall', items: ['<b>Goal:</b> To trade based on the classic MACD (Moving Average Convergence Divergence) indicator.', '<b>How it Works:</b> A trade is triggered when the MACD line and the signal line cross.', '<b>RISE (CALL) Trade:</b> Placed when the MACD line crosses above the signal line, while the MACD is still negative (potential upward trend).', '<b>FALL (PUT) Trade:</b> Placed when the MACD line crosses below the signal line, while the MACD is still positive (potential downward trend).'] },
-                                    { c: 'orange', t: 'Manual', items: ['<b>Goal:</b> To give you full control over your trades.', '<b>How it Works:</b> You set the exact contract type and barrier you want to trade (e.g., `DIGITOVER 7`). You also set one or two trigger digits.', '<b>Execution:</b> When the last digit of the market price matches your trigger, the tool will execute the single trade that you have defined.'] },
+                                    // ─── STRATEGIES ──────────────────────────────────────────
+                                    { c: 'blue', t: 'Over 5 / Under 4 (Default Strategy)', items: [
+                                        '<b>Goal:</b> Win on most digits by firing two opposite contracts at the same moment.',
+                                        '<b>How it Works:</b> When the last digit of the market price matches your trigger digit, the bot fires a <b>DIGITOVER 5</b> AND a <b>DIGITUNDER 4</b> contract simultaneously. You win on every digit except exactly 4 and 5.',
+                                        '<b>Options:</b> <b>Digit Trigger</b> (turn off to fire on every tick), <b>2nd Trigger</b> (fire only when the previous digit was X and current digit is Y), <b>All Volatilities</b> (run the strategy on every index in parallel), <b>Digit Filter</b> (skip a trigger when digit 4 or 5 has appeared too often recently), <b>Rebounce</b> (re-fire after a missed sequence).',
+                                    ] },
+                                    { c: 'purple', t: 'Differs', items: [
+                                        '<b>Goal:</b> Catch a sharp price reversal and bet against the rejected digit.',
+                                        '<b>How it Works:</b> Watches for a <b>surge</b> — at least 2 consecutive ticks moving the same direction — followed by a sharp reversal. The reversal digit becomes the barrier and a <b>DIGITDIFF</b> contract is placed (you win unless the next tick repeats that digit).',
+                                        '<b>Smart Filters:</b> A prediction engine plus four safety checks (digit too frequent, digit recently spiking, digit appears in last 10 ticks too often, digit flagged by predictor) skip risky trades.',
+                                        '<b>Options:</b> <b>Digit Trigger</b>, <b>2-Term Compound</b> (re-test on the next tick after a win for compound growth), <b>Auto Cycle</b> (keep cycling), <b>All Volatilities</b>.',
+                                    ] },
+                                    { c: 'pink', t: 'Differs V2', items: [
+                                        '<b>Goal:</b> A faster, simpler Differs — fire on repeating digits.',
+                                        '<b>How it Works (default):</b> When the same last digit appears 2 ticks in a row (a "double"), instantly place a <b>DIGITDIFF</b> on that digit.',
+                                        '<b>Tatu Bora:</b> Wait for a TRIPLE (3 same digits in a row) before firing — rarer pattern, higher hit rate.',
+                                        '<b>Nne Kwisha:</b> Wait for a QUAD (4 same digits in a row) — the strictest version, fewest trades.',
+                                        '<b>Other Options:</b> <b>2-Term Compound</b>, <b>Auto Cycle</b>, <b>All Volatilities</b>, plus the same digit-frequency safeguards used in Differs.',
+                                    ] },
+                                    { c: 'green', t: 'Rise / Fall', items: [
+                                        '<b>Goal:</b> Trade trend reversals using the MACD indicator.',
+                                        '<b>Volatility Vote:</b> Pulls real recent prices from every volatility in parallel, computes each one\'s MACD histogram, and picks the index with the tallest bars over the last 15 candles (most active momentum).',
+                                        '<b>RISE (CALL):</b> MACD line crosses ABOVE the signal line while BOTH lines are below the zero line — a turn from a downtrend.',
+                                        '<b>FALL (PUT):</b> MACD line crosses BELOW the signal line while BOTH lines are above the zero line — a turn from an uptrend.',
+                                        '<b>Anti-Wobble Filter:</b> The cross is only taken if the gap between the lines on the bar before the cross was at least 25% of the average gap over the last 5 bars — so two lines hugging each other won\'t produce a false signal.',
+                                        '<b>Auto Cycle:</b> After at least 3 trades AND only when the last trade was a WIN, the volatility vote is re-run and the bot may switch indices. A losing streak holds the current index until a win returns.',
+                                    ] },
+                                    { c: 'orange', t: 'Manual', items: [
+                                        '<b>Goal:</b> You decide everything — contract type, barrier, duration, trigger.',
+                                        '<b>Setup:</b> Choose <b>Contract Type</b> (Over / Under / Differs), the <b>Barrier</b> digit (0–9), and <b>Duration</b> in ticks (1–10).',
+                                        '<b>Trigger:</b> Optional — fires only when the last digit matches your trigger, or every tick if disabled.',
+                                        '<b>SCAN AI Button:</b> Asks the AI to look at recent ticks and suggest the best contract type + barrier for the chosen volatility right now.',
+                                        '<b>Manual + Recovery:</b> When recovery is on, every other strategy on every other volatility is paused until the recovery trade for the losing symbol completes — no parallel recovery trades.',
+                                    ] },
+
+                                    // ─── GLOBAL SETTINGS ─────────────────────────────────────
+                                    { c: 'cyan', t: 'Market & Volatility', items: [
+                                        '<b>Volatility Index:</b> The synthetic index you trade on (V10, V25, V50, V75, V100 — with optional 1-second variants).',
+                                        '<b>Auto Switch Volatility:</b> Lets the bot re-run the volatility vote and rotate to whichever index currently scores best for the active strategy.',
+                                        '<b>All Volatilities Mode:</b> Inside each strategy — runs the strategy on every index in parallel, opening trades wherever the conditions are met.',
+                                    ] },
+                                    { c: 'amber', t: 'Stake & Risk', items: [
+                                        '<b>Stake ($):</b> The starting amount for each contract. Minimum $0.35.',
+                                        '<b>Martingale ×:</b> Multiplier applied to the next stake after a loss. After a win, stake resets to your base. Set to 1 to disable martingale.',
+                                        '<b>Turbo Mode:</b> Removes wait-for-prior-tick guards so the bot fires the moment conditions are met. Use only on indices you trust — it can stack trades faster.',
+                                    ] },
+                                    { c: 'red', t: 'Recovery System', items: [
+                                        '<b>Enable Recovery:</b> When ON, the bot fires a one-shot recovery contract designed to win back a recent loss.',
+                                        '<b>Recovery Contract & Barrier:</b> The contract type and digit used for the recovery trade.',
+                                        '<b>Wait For Trigger:</b> If ON, the recovery only fires when your <b>1st Trigger Digit</b> (and optional 2nd) appears. If OFF, recovery fires on the very next tick of the losing volatility — fastest possible reaction.',
+                                        '<b>Manual + Recovery:</b> Recovery is locked to the exact volatility that lost. The bot won\'t open recovery trades on other volatilities at the same time.',
+                                    ] },
+
+                                    // ─── UI / DISPLAY ────────────────────────────────────────
+                                    { c: 'blue', t: 'Digit Heatmap', items: [
+                                        '<b>HOT (green badge):</b> The digit that has appeared the most often in your recent tick window.',
+                                        '<b>LOW (red badge):</b> The digit that has appeared the least often.',
+                                        '<b>P1–P4 (orange badge):</b> Only in Differs / Differs V2 — the four digits most likely to repeat next, ranked by the prediction engine.',
+                                        '<b>Highlighted cell:</b> The most recent last-digit. The taller the bar, the more frequent the digit overall.',
+                                    ] },
+                                    { c: 'green', t: 'Live Monitor (Log Panel)', items: [
+                                        '<b>Green bar:</b> A trade WON.',
+                                        '<b>Red bar:</b> A trade LOST.',
+                                        '<b>Purple bar:</b> A pattern was detected (e.g. Differs surge, MACD cross).',
+                                        '<b>Trash icon:</b> Clears the log history.',
+                                    ] },
+                                    { c: 'orange', t: 'Run / Results Panel', items: [
+                                        'The Run/Results sliding panel shows each contract\'s P&L, journal events, and live transactions.',
+                                        '<b>Re-open Handle:</b> A coral-red tab on the right edge of the screen. Click it any time to slide the panel back in after closing it.',
+                                    ] },
+                                    { c: 'purple', t: 'START / STOP Button', items: [
+                                        '<b>START BOT:</b> Begins live trading using the current strategy and settings.',
+                                        '<b>SCANNING…:</b> Bot is fetching ticks and running the volatility vote before placing the first trade.',
+                                        '<b>STOP BOT:</b> Cancels active monitoring. In-flight contracts are not cancelled (the broker settles them normally).',
+                                    ] },
                                 ] as const).map(s => (
                                     <div key={s.t} className='ou-modal__sec'>
                                         <div className={`ou-modal__sh ou-modal__sh--${s.c}`}>{s.t}</div>
