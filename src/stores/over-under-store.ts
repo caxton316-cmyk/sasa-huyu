@@ -1093,12 +1093,12 @@ export default class OverUnderStore {
 
         // Reject crosses where the two lines were already hugging each other
         // before the crossover. We require the gap on the bar BEFORE the
-        // cross to be at least 40 % of the average absolute histogram value
-        // over the previous 10 bars — this guarantees the lines were
+        // cross to be at least 25 % of the average absolute histogram value
+        // over the previous 5 bars — this guarantees the lines were
         // meaningfully apart and the cross is a genuine reversal, not a
         // tiny wobble of two near-identical lines.
         const sig_len = signal_line.length;
-        const lookback = Math.min(10, sig_len - 1);
+        const lookback = Math.min(5, sig_len - 1);
         let avg_abs_gap = 0;
         if (lookback > 0) {
             let total = 0;
@@ -1110,7 +1110,7 @@ export default class OverUnderStore {
             avg_abs_gap = total / lookback;
         }
         const prev_gap = Math.abs(mp - sp);
-        const min_gap = avg_abs_gap * 0.4;
+        const min_gap = avg_abs_gap * 0.25;
         const has_clear_separation = prev_gap >= min_gap;
 
         if (mp > sp && mc < sc && mc > 0 && sc > 0) {
