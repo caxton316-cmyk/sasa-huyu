@@ -58,6 +58,7 @@ const Dtrader = observer(() => {
             manual_only: '1',
             hide_bot_controls: 'true',
             hide_account_switcher: 'true',
+            hide_trade_panel: 'true',
         });
 
         const url = `https://deriv-dtrader.vercel.app/dtrader?${params.toString()}`;
