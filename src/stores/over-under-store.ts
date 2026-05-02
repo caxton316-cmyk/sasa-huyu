@@ -964,9 +964,10 @@ export default class OverUnderStore {
                             // The only hard gate is the symbol lock (already checked inside
                             // analyzeAndExecuteRiseFallV2) and active_contracts (we must not
                             // stack trades while one is still open).
-                            if (this.is_auto_running && this.is_rise_fall_v2_mode && !this.is_all_vol_mode) {
-                                if (!this.symbol_locks[this.selected_symbol] && this.active_contracts.size === 0 && !this.is_purchasing) {
-                                    this.analyzeAndExecuteRiseFallV2();
+                            if (this.is_auto_running && this.is_rise_fall_v2_mode) {
+                                const active_symbol = this.is_all_vol_mode ? tick_symbol : this.selected_symbol;
+                                if (!this.symbol_locks[active_symbol] && this.active_contracts.size === 0 && !this.is_purchasing) {
+                                    this.analyzeAndExecuteRiseFallV2(this.is_all_vol_mode ? active_symbol : undefined);
                                 }
                             } else if (this.is_auto_running && !is_general_busy) {
 
@@ -1279,12 +1280,14 @@ export default class OverUnderStore {
      * Called on every tick when Rise/Fall V2 is active.
      * Tracks 5 consecutive growing histogram bars and fires a trade on the 5th (with 1-bar crossover delay).
      */
-    analyzeAndExecuteRiseFallV2() {
-        const symbol = this.selected_symbol;
+    analyzeAndExecuteRiseFallV2(target_symbol?: string) {
+        const symbol = target_symbol || this.selected_symbol;
         if (this.symbol_locks[symbol]) return;
-        if (this._tick_prices.length < 35) return;
+        
+        const prices = target_symbol ? this.symbol_data[target_symbol]?._tick_prices : this._tick_prices;
+        if (!prices || prices.length < 35) return;
 
-        const histogram = this.calcMACDHistogram(this._tick_prices);
+        const histogram = this.calcMACDHistogram(prices);
         if (histogram.length < 2) return;
 
         const currentBar = histogram[histogram.length - 1];
