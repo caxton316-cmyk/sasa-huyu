@@ -15,6 +15,8 @@ interface BotData {
     strategy: string;
     features: string[];
     xml: string;
+    badge_text?: string;
+    badge_class?: string;
 }
 
 const DEFAULT_FEATURES = ['Automated Trading', 'Risk Management', 'Profit Optimization'];
@@ -53,9 +55,9 @@ const FreeBots = observer(() => {
                 'Advanced Under 8 trading bot with R67 recovery system. Designed for optimal performance with sophisticated pattern recognition and recovery.',
             'MAKOTIV3RISE FALL':
                 'Premium Rise/Fall trading bot with MACD analysis and intelligent recovery. Optimized for consistent returns in trending markets.',
-            'MAKOTIRISE FALLV4':
-                'Latest version of the Makoti Rise Fall bot. Enhanced with improved entry signals and advanced recovery management for maximum stability.',
-        };
+                            'MAKOTIRISE FALLV4':
+                                'Latest version of the Makoti Rise Fall bot. Enhanced with improved entry signals and advanced recovery management for maximum stability.',
+                        };
 
         // Try exact match first
         if (descriptions[botName]) {
@@ -153,6 +155,7 @@ const FreeBots = observer(() => {
                 // Update skeletons to our explicit list
                 const skeletonBots: BotData[] = manifest.map(item => {
                     const botName = (item.name || item.file.replace('.xml', '')).replace(/[_-]/g, ' ');
+                    const isPremiumPlus = botName.includes('MAKOTIRISE FALLV4');
                     return {
                         name: botName,
                         description: getBotDescription(botName),
@@ -160,6 +163,8 @@ const FreeBots = observer(() => {
                         strategy: 'Multi-Strategy',
                         features: DEFAULT_FEATURES,
                         xml: '',
+                        badge_text: isPremiumPlus ? 'PREMIUM PLUS' : 'PREMIUM',
+                        badge_class: isPremiumPlus ? 'premium-plus' : 'premium',
                     };
                 });
                 setAvailableBots(skeletonBots);
@@ -172,6 +177,7 @@ const FreeBots = observer(() => {
                         const xml = await fetchXmlWithCache(item.file);
                         if (xml) {
                             const botName = (item.name || item.file.replace('.xml', '')).replace(/[_-]/g, ' ');
+                            const isPremiumPlus = botName.includes('MAKOTIRISE FALLV4');
                             loadedBots.push({
                                 name: botName,
                                 description: getBotDescription(botName),
@@ -179,6 +185,8 @@ const FreeBots = observer(() => {
                                 strategy: 'Multi-Strategy',
                                 features: DEFAULT_FEATURES,
                                 xml,
+                                badge_text: isPremiumPlus ? 'PREMIUM PLUS' : 'PREMIUM',
+                                badge_class: isPremiumPlus ? 'premium-plus' : 'premium',
                             });
                             setAvailableBots([...loadedBots, ...skeletonBots.slice(loadedBots.length)]);
                         }
@@ -223,7 +231,11 @@ const FreeBots = observer(() => {
                 ) : (
                     <div className='free-bots__grid'>
                         {availableBots.map((bot, index) => (
-                            <div key={index} className='free-bot-card'>
+                                <div
+                                    key={index}
+                                    className={`free-bot-card ${bot.badge_class ? `free-bot-card--${bot.badge_class}` : ''}`}
+                                    data-badge={bot.badge_text || 'PREMIUM'}
+                                >
                                 <div className='free-bot-card__header'>
                                     <Text size='s' weight='bold' className='free-bot-card__title'>
                                         {bot.name}

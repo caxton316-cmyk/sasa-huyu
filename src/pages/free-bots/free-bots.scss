@@ -92,7 +92,7 @@
 
     // Premium ribbon tag
     &::before {
-        content: 'PREMIUM';
+        content: attr(data-badge);
         position: absolute;
         top: 0;
         right: 0;
@@ -106,6 +106,14 @@
         z-index: 2;
         letter-spacing: 1px;
         box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+    }
+
+    &--premium-plus {
+        &::before {
+            background: linear-gradient(135deg, #ffcc00, #ff9900); // More intense gold
+            box-shadow: 0 2px 12px rgba(255, 204, 0, 0.5);
+            border: 1px solid #ffcc00;
+        }
     }
 
     &__header {
