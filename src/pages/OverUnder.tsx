@@ -186,6 +186,7 @@ const OverUnder = observer(() => {
 
     const selectStrategy = (s: Strategy) => {
         if (disabled) return;
+        over_under.resetStrategyToggles();
         setIsDiffersMode(s === 'differs');
         setIsDiffersV2Mode(s === 'differs_v2');
         setIsRiseFallV2Mode(s === 'rise_fall_v2');

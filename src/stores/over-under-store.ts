@@ -212,6 +212,7 @@ export default class OverUnderStore {
             handleStartStop: action.bound,
             addLog: action.bound,
             clearDebug: action.bound,
+            resetStrategyToggles: action.bound,
             setIsDigitOccurrenceFilterActive: action.bound,
             setIsRebounceActive: action.bound,
             setIsAiScanning: action.bound,
@@ -462,6 +463,24 @@ export default class OverUnderStore {
     }
 
     clearDebug() { this.debug_info = []; }
+    
+    resetStrategyToggles() {
+        this.is_all_vol_mode = false;
+        this.is_automate = false;
+        this.is_2term_mode = false;
+        this.is_volatility_changer = false;
+        this.is_tatu_bora_mode = false;
+        this.is_nne_kwisha_mode = false;
+        this.is_trigger_enabled = false;
+        this.use_second_trigger = true;
+        this.is_digit_occurrence_filter_active = false;
+        this.is_rebounce_active = false;
+        
+        // Ensure subscriptions are updated if All Vol mode was on
+        if (this.ws?.readyState === WebSocket.OPEN && (this.connection_status === STATUS_LIVE || this.connection_status === STATUS_AUTHORIZED)) {
+            this.subscribeToTicks(this.selected_symbol);
+        }
+    }
     setStake(stake: number) { this.stake = stake; if (!this.is_auto_running) this.initial_stake = stake; }
     setMartingale(value: number) { this.martingale = value; }
     setIsVolatilityChanger(value: boolean) { this.is_volatility_changer = value; }
