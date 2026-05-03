@@ -24,7 +24,9 @@ export default Engine =>
 
         async virtualPurchase(contract_type) {
             console.log('🤖 [VIRTUAL HOOK] Executing VIRTUAL trade');
-            const proposal = this.data.proposals.find(p => p.contract_type === contract_type);
+            const { id } = this.selectProposal(contract_type);
+            const proposal = this.data.proposals.find(p => p.id === id);
+
             if (!proposal) {
                 throw new Error('Proposal not found for virtual trade');
             }
