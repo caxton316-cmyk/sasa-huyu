@@ -274,10 +274,10 @@ const AppHeader = observer(({ isAuthenticating }: TAppHeaderProps) => {
                                 try {
                                     const tmbEnabled = await isTmbEnabled();
                                     if (tmbEnabled) {
-                                        await onRenderTMBCheck(true);
+                                        await onRenderTMBCheck(true, undefined, false);
                                     } else {
                                         // Direct link to old authorize endpoint
-                                        window.location.href = generateOAuthURL(false);
+                                        window.location.href = generateOAuthURL(false, 'home');
                                     }
                                 } catch (error) {
                                     console.error(error);
@@ -293,10 +293,10 @@ const AppHeader = observer(({ isAuthenticating }: TAppHeaderProps) => {
                                 try {
                                     const tmbEnabled = await isTmbEnabled();
                                     if (tmbEnabled) {
-                                        await onRenderTMBCheck(true);
+                                        await onRenderTMBCheck(true, undefined, true);
                                     } else {
                                         // Direct link to new auth endpoint
-                                        window.location.href = generateOAuthURL(true);
+                                        window.location.href = generateOAuthURL(true, 'home');
                                     }
                                 } catch (error) {
                                     console.error(error);

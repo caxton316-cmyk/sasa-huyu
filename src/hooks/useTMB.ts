@@ -18,7 +18,7 @@ type UseTMBReturn = {
     handleLogout: () => void;
     isOAuth2Enabled: boolean;
     is_tmb_enabled: boolean;
-    onRenderTMBCheck: (fromLoginButton?: boolean, setIsAuthenticating?: (value: boolean) => void) => Promise<void>;
+    onRenderTMBCheck: (fromLoginButton?: boolean, setIsAuthenticating?: (value: boolean) => void, is_new_account?: boolean) => Promise<void>;
     isTmbEnabled: () => Promise<boolean>;
     isInitialized: boolean;
     isTmbCheckComplete: boolean;
@@ -285,8 +285,7 @@ const useTMB = (): UseTMBReturn => {
     }, []);
 
     const onRenderTMBCheck = useCallback(
-        async (fromLoginButton = false, setIsAuthenticating?: (value: boolean) => void) => {
-            if (isCallbackPage) return;
+        async (fromLoginButton?: boolean, setIsAuthenticating?: (value: boolean) => void, is_new_account = false) => {           if (isCallbackPage) return;
             if (TMBState.checkInProgress) return;
 
             TMBState.checkInProgress = true;
@@ -312,7 +311,7 @@ const useTMB = (): UseTMBReturn => {
                         setIsAuthenticating(false);
                     }
                     try {
-                        window.location.replace(generateOAuthURL());
+                        window.location.replace(generateOAuthURL(is_new_account, 'home'));
                     } catch (error) {
                         console.error('Failed to redirect to OAuth:', error);
                         if (setIsAuthenticating) {
