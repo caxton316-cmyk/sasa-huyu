@@ -52,8 +52,6 @@ export default Engine =>
             const { proposals } = this.data;
 
             if (proposals.length === 0) {
-                // If proposals are not ready, we might be in a race condition.
-                // For virtual trades, we can afford a small wait.
                 console.log('⏳ [PROPOSAL] Proposals not ready, checking templates...');
                 if (this.proposal_templates && this.proposal_templates.length > 0) {
                     this.requestProposals();
@@ -66,10 +64,11 @@ export default Engine =>
                     proposal.contract_type === contract_type &&
                     proposal.purchase_reference === this.getPurchaseReference()
                 ) {
-                    // Below happens when a user has had one of the proposals return
-                    // with a ContractBuyValidationError. We allow the logic to continue
-                    // to here cause the opposite proposal may still be valid. Only once
-                    // they attempt to purchase the errored proposal we will intervene.
+                    // Bypass balance/validation errors for virtual trades
+                    if (this.vh_state.enabled && this.vh_state.is_virtual) {
+                        return proposal;
+                    }
+
                     if (proposal.error) {
                         throw proposal.error;
                     }
@@ -84,9 +83,16 @@ export default Engine =>
                 throw new Error(localize('Selected proposal does not exist'));
             }
 
+            // Use isolated VH stake if in virtual mode
+            let askPrice = to_buy.ask_price;
+            if (this.vh_state.enabled && this.vh_state.is_virtual && this.vh_state.current_stake) {
+                askPrice = this.vh_state.current_stake;
+                console.log(`🤖 [VIRTUAL HOOK] Using isolated VH stake: ${askPrice}`);
+            }
+
             return {
                 id: to_buy.id,
-                askPrice: to_buy.ask_price,
+                askPrice: askPrice,
             };
         }
 

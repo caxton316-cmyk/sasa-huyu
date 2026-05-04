@@ -28,7 +28,7 @@ export default Engine =>
             
             let proposal;
             let retries = 0;
-            const maxRetries = 10; // 5 seconds total wait
+            const maxRetries = 10;
 
             while (retries < maxRetries) {
                 try {
@@ -37,19 +37,23 @@ export default Engine =>
                     if (proposal) break;
                 } catch (e) {
                     if (e.message === localize('Proposals are not ready') || e.message === 'Proposals are not ready') {
-                        console.log(`⏳ [VIRTUAL HOOK] Proposals not ready, retrying... (${retries + 1}/${maxRetries})`);
                         await new Promise(resolve => setTimeout(resolve, 500));
                         retries++;
                         continue;
                     }
-                    console.error('🤖 [VIRTUAL HOOK] Error selecting proposal:', e.message);
-                    throw new Error(`Virtual trade failed: ${e.message}. Please ensure your strategy blocks are correctly configured.`);
+                    throw new Error(`Virtual trade failed: ${e.message}`);
                 }
                 retries++;
             }
 
             if (!proposal) {
-                throw new Error('Virtual trade failed: Proposals timed out. Please check your internet connection or strategy configuration.');
+                throw new Error('Virtual trade failed: Proposals timed out.');
+            }
+
+            // Initialize VH stake tracking if not set
+            if (!this.vh_state.initial_stake) {
+                this.vh_state.initial_stake = Number(proposal.ask_price);
+                this.vh_state.current_stake = this.vh_state.initial_stake;
             }
 
             this.store.dispatch(purchaseSuccessful());
@@ -69,34 +73,15 @@ export default Engine =>
                 const last_digit = Number(String(end_spot).slice(-1));
 
                 switch (trade_contract_type) {
-                    case 'CALL':
-                        is_win = end_spot > entry_spot;
-                        break;
-                    case 'PUT':
-                        is_win = end_spot < entry_spot;
-                        break;
-                    case 'DIGITMATCH':
-                        is_win = last_digit === prediction;
-                        break;
-                    case 'DIGITDIFF':
-                        is_win = last_digit !== prediction;
-                        break;
-                    case 'DIGITOVER':
-                        is_win = last_digit > prediction;
-                        break;
-                    case 'DIGITUNDER':
-                        is_win = last_digit < prediction;
-                        break;
-                    case 'DIGITODD':
-                        is_win = last_digit % 2 !== 0;
-                        break;
-                    case 'DIGITEVEN':
-                        is_win = last_digit % 2 === 0;
-                        break;
-                    default:
-                        console.log(`[VIRTUAL HOOK] Using random simulation for ${trade_contract_type}.`);
-                        is_win = Math.random() > 0.5;
-                        break;
+                    case 'CALL': is_win = end_spot > entry_spot; break;
+                    case 'PUT': is_win = end_spot < entry_spot; break;
+                    case 'DIGITMATCH': is_win = last_digit === prediction; break;
+                    case 'DIGITDIFF': is_win = last_digit !== prediction; break;
+                    case 'DIGITOVER': is_win = last_digit > prediction; break;
+                    case 'DIGITUNDER': is_win = last_digit < prediction; break;
+                    case 'DIGITODD': is_win = last_digit % 2 !== 0; break;
+                    case 'DIGITEVEN': is_win = last_digit % 2 === 0; break;
+                    default: is_win = Math.random() > 0.5; break;
                 }
 
                 const simulated_contract = {
@@ -111,6 +96,7 @@ export default Engine =>
                 this.updateVirtualTotals(simulated_contract);
             };
 
+            // Simulated wait for contract duration
             if (duration_unit === 't') {
                 let tick_count = 0;
                 const tick_subscriber = api_base.api.onMessage().subscribe(({ data }) => {
@@ -125,11 +111,7 @@ export default Engine =>
                 api_base.pushSubscription(tick_subscriber);
                 api_base.api.send({ ticks: symbol, subscribe: 1 });
             } else {
-                let duration_ms = duration * 1000;
-                if (duration_unit === 'm') {
-                    duration_ms *= 60;
-                }
-
+                let duration_ms = duration * 1000 * (duration_unit === 'm' ? 60 : 1);
                 setTimeout(() => {
                     const tick_subscriber = api_base.api.onMessage().subscribe(({ data }) => {
                         if (data.msg_type === 'tick' && data.tick.symbol === symbol) {
@@ -147,19 +129,40 @@ export default Engine =>
 
         updateVirtualTotals(contract) {
             const win = contract.profit > 0;
-            console.log(`🤖 [VIRTUAL HOOK] Virtual trade result: ${win ? 'WIN' : 'LOSS'}`);
+            console.log(`🤖 [VIRTUAL HOOK] Virtual result: ${win ? 'WIN' : 'LOSS'}`);
 
-            if (!win) {
+            // 1. Isolated VH Martingale Logic
+            if (win) {
+                this.vh_state.loss_count = 0;
+                this.vh_state.step_count = 0;
+                this.vh_state.current_stake = this.vh_state.initial_stake;
+                console.log('🤖 [VIRTUAL HOOK] Win. Resetting VH stake.');
+            } else {
                 this.vh_state.loss_count++;
-                console.log(`🤖 [VIRTUAL HOOK] Virtual loss count: ${this.vh_state.loss_count}/${this.vh_state.threshold}`);
+                this.vh_state.step_count++;
+                
+                // Multiply stake if under max steps
+                if (this.vh_state.step_count < this.vh_state.maxSteps) {
+                    this.vh_state.current_stake = Number((this.vh_state.current_stake * this.vh_state.martingaleFactor).toFixed(2));
+                    console.log(`🤖 [VIRTUAL HOOK] Loss. VH Martingale: ${this.vh_state.current_stake} (Step ${this.vh_state.step_count}/${this.vh_state.maxSteps})`);
+                } else {
+                    this.vh_state.current_stake = this.vh_state.initial_stake;
+                    this.vh_state.step_count = 0;
+                    console.log('🤖 [VIRTUAL HOOK] Max steps reached. Resetting VH stake.');
+                }
+
+                // 2. Check for switch to REAL trades
                 if (this.vh_state.loss_count >= this.vh_state.threshold) {
                     this.vh_state.is_virtual = false;
+                    this.vh_state.real_trade_count = 0; // Reset real trade counter
                     console.log('🤖 [VIRTUAL HOOK] THRESHOLD REACHED. Switching to REAL trades.');
                 }
-            } else {
-                this.vh_state.loss_count = 0;
-                console.log('🤖 [VIRTUAL HOOK] Virtual win. Staying in virtual mode.');
             }
+
+            // 3. Global VH limits check (Take Profit / Stop Loss)
+            // Note: These are simplified for the VH session. 
+            // In a full implementation, you'd track cumulative VH profit/loss.
+            // For now, we focus on the core requirement: isolating martingale and balance.
 
             const now = Math.floor(Date.now() / 1000);
             const virtual_id = 1000000000 + Math.floor(Math.random() * 900000000);
@@ -171,10 +174,6 @@ export default Engine =>
                 display_transaction_ids: { buy: String(virtual_id), sell: String(virtual_id + 1) },
                 entry_tick: contract.entry_spot,
                 exit_tick: contract.exit_spot,
-                entry_tick_display_value: String(contract.entry_spot),
-                exit_tick_display_value: String(contract.exit_spot),
-                entry_tick_time: now - 1,
-                exit_tick_time: now,
                 date_start: now - 1,
                 display_name: win ? localize('Virtual Win') : localize('Virtual Loss'),
                 is_virtual: true,
@@ -183,33 +182,16 @@ export default Engine =>
                 underlying: this.tradeOptions.symbol,
             };
 
-            // CRITICAL: We DO NOT call this.updateTotals(virtual_contract) here.
-            // This ensures virtual trades do not affect global statistics, total profit/loss,
-            // run counts, or Martingale logic which relies on those statistics.
-
-            // Emit events to update the UI (Transactions tab)
-            // Note: We still emit this so the user can see the virtual trade in the transactions list
-            globalObserver.emit('bot.contract', {
-                ...virtual_contract,
-                is_sold: true,
-                is_virtual: true, // Explicitly mark as virtual
-            });
-
-            // We do NOT call info() with statistics update for virtual trades
-            // This keeps the summary panel totals clean from virtual results.
-            console.log('🤖 [VIRTUAL HOOK] Virtual trade completed. Statistics and Martingale bypassed.');
+            globalObserver.emit('bot.contract', { ...virtual_contract, is_sold: true, is_virtual: true });
+            console.log('🤖 [VIRTUAL HOOK] Virtual trade completed. Main statistics bypassed.');
 
             this.store.dispatch(sell());
-
             this.renewProposalsOnPurchase();
 
             const unsubscribe = this.store.subscribe(() => {
-                const proposalsReady = this.store.getState().proposalsReady;
-                if (proposalsReady) {
+                if (this.store.getState().proposalsReady) {
                     unsubscribe();
-                    if (this.afterPromise) {
-                        this.afterPromise();
-                    }
+                    if (this.afterPromise) this.afterPromise();
                 }
             });
         }
@@ -373,10 +355,18 @@ export default Engine =>
                         const contract = this.data.contract;
                         const win = contract.profit > 0;
                         console.log(`🤖 [VIRTUAL HOOK] REAL trade result: ${win ? 'WIN' : 'LOSS'}`);
-                        if (win) {
-                            console.log('🤖 [VIRTUAL HOOK] REAL WIN. Going back to VIRTUAL mode.');
+                        
+                        this.vh_state.real_trade_count = (this.vh_state.real_trade_count || 0) + 1;
+                        const minReal = this.vh_state.minTradesOnReal || 1;
+
+                        if (win && this.vh_state.real_trade_count >= minReal) {
+                            console.log(`🤖 [VIRTUAL HOOK] REAL WIN after ${this.vh_state.real_trade_count} trades. Going back to VIRTUAL mode.`);
                             this.vh_state.is_virtual = true;
                             this.vh_state.loss_count = 0;
+                            this.vh_state.step_count = 0;
+                            this.vh_state.current_stake = this.vh_state.initial_stake;
+                        } else if (win) {
+                            console.log(`🤖 [VIRTUAL HOOK] REAL WIN but only ${this.vh_state.real_trade_count}/${minReal} real trades. Staying in REAL mode.`);
                         } else {
                             console.log('🤖 [VIRTUAL HOOK] REAL LOSS. Staying in REAL mode until win.');
                         }

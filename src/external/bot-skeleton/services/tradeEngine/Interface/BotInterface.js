@@ -31,10 +31,29 @@ const getBotInterface = tradeEngine => {
                     // If enabling, also set is_virtual to true to start virtual trades
                     if (settings.enabled) {
                         tradeEngine.vh_state.is_virtual = true;
+                        tradeEngine.vh_state.loss_count = 0;
+                        tradeEngine.vh_state.step_count = 0;
+                        tradeEngine.vh_state.initial_stake = 0; // Will be re-initialized on first virtual trade
+                        tradeEngine.vh_state.current_stake = 0;
                     }
                 }
                 if (typeof settings.threshold !== 'undefined') {
                     tradeEngine.vh_state.threshold = Number(settings.threshold);
+                }
+                if (typeof settings.martingaleFactor !== 'undefined') {
+                    tradeEngine.vh_state.martingaleFactor = Number(settings.martingaleFactor);
+                }
+                if (typeof settings.maxSteps !== 'undefined') {
+                    tradeEngine.vh_state.maxSteps = Number(settings.maxSteps);
+                }
+                if (typeof settings.minTradesOnReal !== 'undefined') {
+                    tradeEngine.vh_state.minTradesOnReal = Number(settings.minTradesOnReal);
+                }
+                if (typeof settings.takeProfit !== 'undefined') {
+                    tradeEngine.vh_state.takeProfit = Number(settings.takeProfit);
+                }
+                if (typeof settings.stopLoss !== 'undefined') {
+                    tradeEngine.vh_state.stopLoss = Number(settings.stopLoss);
                 }
             }
         },
