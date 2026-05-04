@@ -25,11 +25,12 @@ type TLoginUrl = {
     language: string;
 };
 
-export const loginUrl = ({ language }: TLoginUrl) => {
+export const loginUrl = ({ language, is_new_account = false }: TLoginUrl & { is_new_account?: boolean }) => {
     const server_url = LocalStore.get('config.server_url');
     const getOAuthUrl = () => {
         const redirect_uri = `${window.location.origin}/callback`;
-        return `https://oauth.deriv.com/oauth2/authorize?app_id=${getAppId()}&l=${language}&redirect_uri=${redirect_uri}&brand=deriv&redirect=home`;
+        const endpoint = is_new_account ? 'auth.deriv.com/oauth2/auth' : 'oauth.deriv.com/oauth2/authorize';
+        return `https://${endpoint}?app_id=${getAppId()}&l=${language}&redirect_uri=${redirect_uri}&brand=deriv&redirect=home`;
     };
 
     if (server_url && /qa/.test(server_url)) {

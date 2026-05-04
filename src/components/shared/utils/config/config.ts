@@ -102,21 +102,22 @@ export const getDebugServiceWorker = () => {
     return false;
 };
 
-export const generateOAuthURL = (is_new_account = false) => {
+export const generateOAuthURL = (is_new_account = false, state = '') => {
     const language = 'EN';
     const server_url = localStorage.getItem('config.server_url');
     const redirect_uri = `${window.location.origin}/callback`;
     const app_id = getAppId();
+    const state_param = state ? `&state=${state}` : '';
 
     if (server_url && /qa/.test(server_url)) {
-        return `https://${server_url}/oauth2/authorize?app_id=${app_id}&l=${language}&redirect_uri=${redirect_uri}&brand=deriv&redirect=home`;
+        return `https://${server_url}/oauth2/authorize?app_id=${app_id}&l=${language}&redirect_uri=${redirect_uri}&brand=deriv&redirect=home${state_param}`;
     }
 
     // New accounts: auth.deriv.com/oauth2/auth
     if (is_new_account) {
-        return `https://auth.deriv.com/oauth2/auth?app_id=${app_id}&l=${language}&redirect_uri=${redirect_uri}&brand=deriv&redirect=home`;
+        return `https://auth.deriv.com/oauth2/auth?app_id=${app_id}&l=${language}&redirect_uri=${redirect_uri}&brand=deriv&redirect=home${state_param}`;
     }
 
     // Old accounts: oauth.deriv.com/oauth2/authorize
-    return `https://oauth.deriv.com/oauth2/authorize?app_id=${app_id}&l=${language}&redirect_uri=${redirect_uri}&brand=deriv&redirect=home`;
+    return `https://oauth.deriv.com/oauth2/authorize?app_id=${app_id}&l=${language}&redirect_uri=${redirect_uri}&brand=deriv&redirect=home${state_param}`;
 };

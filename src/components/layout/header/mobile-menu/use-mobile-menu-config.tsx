@@ -105,6 +105,24 @@ const useMobileMenuConfig = (client?: RootStore['client']) => {
     const menuConfig = useMemo(
         (): TMenuConfig[] => [
             [
+                !is_logged_in && {
+                    as: 'button',
+                    label: localize('Log in (Old)'),
+                    LeftComponent: LegacyProfileSmIcon,
+                    onClick: () => {
+                        const { generateOAuthURL } = require('@/components/shared');
+                        window.location.href = generateOAuthURL(false);
+                    },
+                },
+                !is_logged_in && {
+                    as: 'button',
+                    label: localize('Log in (New)'),
+                    LeftComponent: LegacyProfileSmIcon,
+                    onClick: () => {
+                        const { generateOAuthURL } = require('@/components/shared');
+                        window.location.href = generateOAuthURL(true);
+                    },
+                },
                 {
                     as: 'button',
                     label: localize('Dark theme'),
@@ -114,7 +132,7 @@ const useMobileMenuConfig = (client?: RootStore['client']) => {
                 },
             ].filter(Boolean) as TMenuConfig,
         ],
-        [is_dark_mode_on, toggleTheme]
+        [is_dark_mode_on, toggleTheme, is_logged_in, localize]
     );
 
     return {

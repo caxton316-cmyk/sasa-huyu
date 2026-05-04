@@ -276,7 +276,7 @@ const AppHeader = observer(({ isAuthenticating }: TAppHeaderProps) => {
                                     if (tmbEnabled) {
                                         await onRenderTMBCheck(true);
                                     } else {
-                                        // Old accounts: oauth.deriv.com/oauth2/authorize
+                                        // Direct link to old authorize endpoint
                                         window.location.href = generateOAuthURL(false);
                                     }
                                 } catch (error) {
@@ -295,7 +295,7 @@ const AppHeader = observer(({ isAuthenticating }: TAppHeaderProps) => {
                                     if (tmbEnabled) {
                                         await onRenderTMBCheck(true);
                                     } else {
-                                        // New accounts: auth.deriv.com/oauth2/auth
+                                        // Direct link to new auth endpoint
                                         window.location.href = generateOAuthURL(true);
                                     }
                                 } catch (error) {
