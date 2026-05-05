@@ -79,11 +79,14 @@ export default Engine =>
             this.vh_state.virtual_entry_epoch = Date.now();
             this.vh_state.last_tick_epoch = null; // Deduplication flag
 
-            // 1. Signal Purchase Successful
+            // 1. Signal Purchase Successful - transitions to DURING_PURCHASE
             this.store.dispatch(purchaseSuccessful());
+            console.log('🤖 [VIRTUAL] purchaseSuccessful() - scope: BEFORE_PURCHASE -> DURING_PURCHASE');
 
-            // 2. Mimic "Open Contract" signal - this allows watchDuring to proceed
+            // 2. Signal "Open Contract" - sets openContract: true in state
+            // This allows watchDuring to proceed and PROGRESS BAR TO MOVE
             this.store.dispatch(openContractReceived());
+            console.log('🤖 [VIRTUAL] openContractReceived() - progress bar should move NOW');
 
             // 3. Subscribe to API ticks as backup to ensure we don't miss any ticks
             this.vh_state.virtual_tick_subscription = api_base.api.onMessage().subscribe(({ data }) => {
@@ -323,7 +326,9 @@ export default Engine =>
                 underlying: this.tradeOptions.symbol,
                 contract_type: this.tradeOptions.contract_type,
                 currency: this.tradeOptions.currency || 'USD',
-                shortcode: `${this.tradeOptions.contract_type}_0P_${this.tradeOptions.symbol}`,
+                // Use proper shortcode format for contract type detection
+                // Format: CONTRACTTYPE_S0P_SYMBOL (e.g., CALL_S0P_R_100 for Rise/Fall)
+                shortcode: `${this.tradeOptions.contract_type}_S0P_${this.tradeOptions.symbol.toUpperCase()}`,
             };
 
             globalObserver.emit('bot.contract', { ...virtual_contract, is_sold: true, is_virtual: true });
