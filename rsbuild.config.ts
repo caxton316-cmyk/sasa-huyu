@@ -24,6 +24,7 @@ export default defineConfig({
         entry: {
             index: './src/main.tsx',
         },
+        include: [/node_modules\/@deriv-com\/translations/],
         define: {
             'process.env': {
                 TRANSLATIONS_CDN_URL: JSON.stringify(process.env.TRANSLATIONS_CDN_URL),
@@ -60,6 +61,9 @@ export default defineConfig({
             '@/utils': path.resolve(__dirname, './src/utils'),
             '@/constants': path.resolve(__dirname, './src/constants'),
             '@/stores': path.resolve(__dirname, './src/stores'),
+            '@/types': path.resolve(__dirname, './src/types'),
+            '@/pages': path.resolve(__dirname, './src/pages'),
+            '@/app': path.resolve(__dirname, './src/app'),
         },
     },
     output: {

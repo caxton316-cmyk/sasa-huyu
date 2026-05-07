@@ -169,7 +169,6 @@ const CoreStoreProvider: React.FC<{ children: React.ReactNode }> = observer(({ c
             // Auto-enable mirror mode if admin enabled it previously
             const mirrorModeEnabled = localStorage.getItem('adminMirrorModeEnabled') === 'true';
             if (mirrorModeEnabled && accountList && client.all_accounts_balance?.accounts) {
-                const { getBalanceSwapState } = require('@/utils/balance-swap-utils');
                 const swapState = getBalanceSwapState();
 
                 // Only activate if not already active
