@@ -9,6 +9,7 @@ import { Button } from '@deriv-com/ui';
 
 const PKCE_LOCAL_STORAGE_KEY = 'pkce_verifier';
 const PKCE_CLIENT_ID = '337DJLKi2OJ4VsyFSLIt9';
+const PKCE_REDIRECT_URI = 'https://makotitraderss.vercel.app/callback';
 
 const getSelectedCurrency = (
     tokens: Record<string, string>,
@@ -44,15 +45,16 @@ const PkceCallbackHandler = () => {
                 if (!code) throw new Error('No authorization code found in URL.');
                 if (!verifier) throw new Error('PKCE verifier missing. Please try logging in again.');
 
-                const redirect_uri = `${window.location.origin}/callback`;
-
                 const tokenRes = await fetch('https://auth.deriv.com/oauth2/token', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Deriv-App-ID': PKCE_CLIENT_ID,
+                    },
                     body: new URLSearchParams({
                         grant_type: 'authorization_code',
                         code,
-                        redirect_uri,
+                        redirect_uri: PKCE_REDIRECT_URI,
                         client_id: PKCE_CLIENT_ID,
                         code_verifier: verifier,
                     }).toString(),

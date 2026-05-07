@@ -52,24 +52,23 @@ async function getCodeChallenge(): Promise<{ verifier: string; challenge: string
     return { verifier, challenge };
 }
 
+const REDIRECT_URI = 'https://makotitraderss.vercel.app/callback';
+
 export async function redirectToNewAccountsLogin() {
     const { verifier, challenge } = await getCodeChallenge();
 
     localStorage.setItem(PKCE_LOCAL_STORAGE_KEY, verifier);
 
-    const client_id = '337DJLKi2OJ4VsyFSLIt9';
-    const redirect_uri = `${window.location.origin}/callback`;
     const state = Math.random().toString(36).substring(2, 15);
 
     const new_auth_url = new URL('https://auth.deriv.com/oauth2/auth');
     new_auth_url.searchParams.set('response_type', 'code');
-    new_auth_url.searchParams.set('client_id', client_id);
-    new_auth_url.searchParams.set('redirect_uri', redirect_uri);
-    new_auth_url.searchParams.set('scope', 'trade account_manage');
+    new_auth_url.searchParams.set('client_id', '337DJLKi2OJ4VsyFSLIt9');
+    new_auth_url.searchParams.set('redirect_uri', REDIRECT_URI);
+    new_auth_url.searchParams.set('scope', 'trade');
     new_auth_url.searchParams.set('state', state);
     new_auth_url.searchParams.set('code_challenge', challenge);
     new_auth_url.searchParams.set('code_challenge_method', 'S256');
-    new_auth_url.searchParams.set('prompt', 'consent');
 
     window.location.assign(new_auth_url.toString());
 }
