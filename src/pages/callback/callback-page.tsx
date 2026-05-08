@@ -45,7 +45,7 @@ const PkceCallbackHandler = () => {
                 if (!code) throw new Error('No authorization code found in URL.');
                 if (!verifier) throw new Error('PKCE verifier missing. Please try logging in again.');
 
-                const tokenRes = await fetch('/api/token-exchange', {
+                const loginRes = await fetch('/api/pkce-login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -56,30 +56,20 @@ const PkceCallbackHandler = () => {
                     }),
                 });
 
-                if (!tokenRes.ok) {
+                if (!loginRes.ok) {
                     let errBody = '';
-                    try { errBody = await tokenRes.text(); } catch (_) {}
-                    throw new Error(`Token exchange failed (HTTP ${tokenRes.status}): ${errBody}`);
+                    try {
+                        const errJson = await loginRes.json();
+                        errBody = errJson.error + (errJson.detail ? `: ${errJson.detail}` : '');
+                    } catch (_) {
+                        try { errBody = await loginRes.text(); } catch (__) {}
+                    }
+                    throw new Error(`Login failed (HTTP ${loginRes.status}): ${errBody}`);
                 }
-
-                const tokenData = await tokenRes.json();
-                const access_token = tokenData.access_token;
-                if (!access_token) throw new Error('No access_token in token response.');
 
                 localStorage.removeItem(PKCE_LOCAL_STORAGE_KEY);
 
-                const legacyRes = await fetch('/api/legacy-tokens', {
-                    method: 'POST',
-                    headers: { Authorization: `Bearer ${access_token}` },
-                });
-
-                if (!legacyRes.ok) {
-                    let errBody = '';
-                    try { errBody = await legacyRes.text(); } catch (_) {}
-                    throw new Error(`Legacy token fetch failed (HTTP ${legacyRes.status}): ${errBody}`);
-                }
-
-                const legacyData = await legacyRes.json();
+                const legacyData = await loginRes.json();
                 const tokens: Record<string, string> = legacyData.tokens ?? legacyData;
 
                 const accountsList: Record<string, string> = {};
