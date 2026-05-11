@@ -1,97 +1,123 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Scanner } from './scanner';
 import { MarketKiller } from './market-killer';
 import './makoti-widget.scss';
 
 type Tab = 'scanner' | 'market_killer';
-
-const DRAG_BOUNDS = { padding: 8 };
+const PAD = 8;
 
 export const MakotiWidget: React.FC = () => {
-    const [open, setOpen] = useState(false);
-    const [tab, setTab] = useState<Tab>('scanner');
-    const [pos, setPos] = useState<{ x: number; y: number }>(() => ({
-        x: window.innerWidth - 100,
-        y: window.innerHeight - 120,
-    }));
-    const [winPos, setWinPos] = useState<{ x: number; y: number }>(() => ({
-        x: Math.max(8, window.innerWidth - 420),
-        y: Math.max(8, window.innerHeight - 640),
-    }));
+    const [open, setOpen]         = useState(false);
+    const [tab, setTab]           = useState<Tab>('scanner');
     const [minimized, setMinimized] = useState(false);
 
-    const draggingBtn = useRef(false);
-    const draggingWin = useRef(false);
-    const dragOffset = useRef({ x: 0, y: 0 });
+    /* ── FAB position ─────────────────────────────────────── */
+    const [btnPos, setBtnPos] = useState(() => ({
+        x: Math.max(PAD, window.innerWidth  - 88),
+        y: Math.max(PAD, window.innerHeight - 108),
+    }));
+
+    /* ── Window position ──────────────────────────────────── */
+    const [winPos, setWinPos] = useState(() => ({
+        x: Math.max(PAD, window.innerWidth  - 420),
+        y: Math.max(PAD, window.innerHeight - 640),
+    }));
+
+    /* ── Drag state (refs, never cause re-renders) ─────────── */
+    const btnDragging  = useRef(false);
+    const winDragging  = useRef(false);
+    const btnMoved     = useRef(false);      // true if pointer actually moved
+    const winMoved     = useRef(false);
+    const startClient  = useRef({ x: 0, y: 0 });
+    const startElem    = useRef({ x: 0, y: 0 });
+
     const btnRef = useRef<HTMLButtonElement>(null);
     const winRef = useRef<HTMLDivElement>(null);
 
-    const onBtnMouseDown = useCallback((e: React.MouseEvent) => {
-        e.preventDefault();
-        draggingBtn.current = true;
-        dragOffset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
-    }, [pos]);
-
-    const onWinMouseDown = useCallback((e: React.MouseEvent) => {
-        if ((e.target as HTMLElement).closest('.mw-win-body')) return;
-        e.preventDefault();
-        draggingWin.current = true;
-        dragOffset.current = { x: e.clientX - winPos.x, y: e.clientY - winPos.y };
-    }, [winPos]);
-
+    /* ── Shared global pointer handlers (attached once) ──── */
     useEffect(() => {
-        const onMove = (e: MouseEvent) => {
-            const p = DRAG_BOUNDS.padding;
-            if (draggingBtn.current) {
-                setPos({
-                    x: Math.max(p, Math.min(window.innerWidth - 70 - p, e.clientX - dragOffset.current.x)),
-                    y: Math.max(p, Math.min(window.innerHeight - 70 - p, e.clientY - dragOffset.current.y)),
-                });
+        const onMove = (e: PointerEvent) => {
+            if (btnDragging.current) {
+                const dx = e.clientX - startClient.current.x;
+                const dy = e.clientY - startClient.current.y;
+                if (Math.abs(dx) > 2 || Math.abs(dy) > 2) btnMoved.current = true;
+                const nx = Math.max(PAD, Math.min(window.innerWidth  - 72 - PAD, startElem.current.x + dx));
+                const ny = Math.max(PAD, Math.min(window.innerHeight - 72 - PAD, startElem.current.y + dy));
+                setBtnPos({ x: nx, y: ny });
             }
-            if (draggingWin.current) {
-                setWinPos({
-                    x: Math.max(p, Math.min(window.innerWidth - 400 - p, e.clientX - dragOffset.current.x)),
-                    y: Math.max(p, Math.min(window.innerHeight - 80, e.clientY - dragOffset.current.y)),
-                });
+            if (winDragging.current) {
+                const dx = e.clientX - startClient.current.x;
+                const dy = e.clientY - startClient.current.y;
+                if (Math.abs(dx) > 2 || Math.abs(dy) > 2) winMoved.current = true;
+                const nx = Math.max(PAD, Math.min(window.innerWidth  - 404 - PAD, startElem.current.x + dx));
+                const ny = Math.max(PAD, Math.min(window.innerHeight - 60,        startElem.current.y + dy));
+                setWinPos({ x: nx, y: ny });
             }
         };
         const onUp = () => {
-            draggingBtn.current = false;
-            draggingWin.current = false;
+            btnDragging.current = false;
+            winDragging.current = false;
         };
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup',   onUp);
         return () => {
-            document.removeEventListener('mousemove', onMove);
-            document.removeEventListener('mouseup', onUp);
+            document.removeEventListener('pointermove', onMove);
+            document.removeEventListener('pointerup',   onUp);
         };
     }, []);
 
-    const handleBtnClick = useCallback((e: React.MouseEvent) => {
-        if (draggingBtn.current) return;
+    /* ── FAB pointer down ─────────────────────────────────── */
+    const onBtnPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+        e.preventDefault();
+        btnDragging.current = true;
+        btnMoved.current    = false;
+        startClient.current = { x: e.clientX, y: e.clientY };
+        startElem.current   = { ...btnPos };
+        btnRef.current?.setPointerCapture(e.pointerId);
+    };
+
+    /* ── FAB click — only toggle if not a drag ────────────── */
+    const onBtnClick = () => {
+        if (btnMoved.current) { btnMoved.current = false; return; }
         setOpen(o => !o);
-    }, []);
+    };
+
+    /* ── Window header pointer down ───────────────────────── */
+    const onWinPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        // Only drag from the header row, not from body content
+        const target = e.target as HTMLElement;
+        if (target.closest('.mw-win-body') || target.closest('.mw-win-action')) return;
+        e.preventDefault();
+        winDragging.current = true;
+        winMoved.current    = false;
+        startClient.current = { x: e.clientX, y: e.clientY };
+        startElem.current   = { ...winPos };
+        winRef.current?.setPointerCapture(e.pointerId);
+    };
 
     return (
         <>
+            {/* ── Floating button ── */}
             <button
                 ref={btnRef}
                 className={`mw-fab${open ? ' mw-fab--open' : ''}`}
-                style={{ left: pos.x, top: pos.y }}
-                onMouseDown={onBtnMouseDown}
-                onClick={handleBtnClick}
+                style={{ left: btnPos.x, top: btnPos.y }}
+                onPointerDown={onBtnPointerDown}
+                onClick={onBtnClick}
                 title='MAKOTI — Scanner & Market Killer'
             >
                 <span className='mw-fab__pulse' />
+                <span className='mw-fab__icon'>⚔</span>
                 <span className='mw-fab__label'>MAKOTI</span>
             </button>
 
+            {/* ── Floating window ── */}
             {open && (
                 <div
                     ref={winRef}
                     className={`mw-window${minimized ? ' mw-window--min' : ''}`}
                     style={{ left: winPos.x, top: winPos.y }}
-                    onMouseDown={onWinMouseDown}
+                    onPointerDown={onWinPointerDown}
                 >
                     <div className='mw-win-header'>
                         <div className='mw-win-title'>
