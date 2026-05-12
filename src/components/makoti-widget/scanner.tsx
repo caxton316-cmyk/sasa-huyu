@@ -230,8 +230,8 @@ export const Scanner: React.FC = () => {
                         onChange={e => setBot(e.target.value as BotId)}
                         disabled={scanning}
                     >
-                        <option value='pvty_kill'>pvty kill</option>
-                        <option value='rf_v4'>rf v4</option>
+                        <option value='pvty_kill'>Poverty Killer</option>
+                        <option value='rf_v4'>Rise/Fall V4</option>
                     </select>
                 </div>
 

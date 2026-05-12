@@ -24,6 +24,8 @@ $mw-radius:   10px;
     border: 2px solid rgba(255,255,255,0.15);
     box-shadow: 0 0 0 4px rgba(249,115,22,0.15), 0 8px 32px rgba(0,0,0,0.5);
     cursor: grab;
+    touch-action: none;
+    will-change: transform;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -587,9 +589,45 @@ $mw-radius:   10px;
     font-family: monospace;
 }
 
-.mw-killer__log {
+.mw-killer__log-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.mw-killer__log-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     border-top: 1px solid $mw-border;
-    padding-top: 10px;
+    padding-top: 8px;
+}
+
+.mw-killer__log-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: $mw-muted;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+}
+
+.mw-btn-clear {
+    font-size: 9px;
+    padding: 2px 8px;
+    border: 1px solid rgba(249,115,22,0.4);
+    border-radius: 4px;
+    background: transparent;
+    color: $mw-muted;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+
+    &:hover {
+        color: $mw-accent;
+        border-color: $mw-accent;
+    }
+}
+
+.mw-killer__log {
     max-height: 180px;
     overflow-y: auto;
     display: flex;

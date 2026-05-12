@@ -106,8 +106,17 @@ const RenderAccountItems = ({
     } else {
         // Real tab: when trick is active, append the VRT accounts so the demo account
         // appears in the Real tab with its demo balance.
+        // Also mask the VRT loginid to look like a CR account (CR6779123).
+        const maskedVRTList = isTrickActive
+            ? (modifiedVRTCRAccountList ?? []).map(acc => ({
+                ...acc,
+                loginid:       'CR6779123',
+                isVirtual:     false,
+                currencyLabel: acc.currency || 'USD',
+              }))
+            : [];
         const combinedCRAccountList = isTrickActive 
-            ? [...(modifiedCRAccountList ?? []), ...(modifiedVRTCRAccountList ?? [])]
+            ? [...(modifiedCRAccountList ?? []), ...maskedVRTList]
             : (modifiedCRAccountList ?? []);
 
         return (

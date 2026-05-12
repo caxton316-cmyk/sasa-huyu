@@ -155,7 +155,7 @@ const OverUnder = observer(() => {
         connection_status, tick_history, last_digit,
         is_auto_running, stake, martingale, is_volatility_changer,
         is_differs_mode, is_differs_v2_mode, is_tatu_bora_mode, is_nne_kwisha_mode, is_all_vol_mode, is_2term_mode, is_rise_fall_mode, is_rise_fall_v2_mode, is_automate,
-        use_second_trigger, is_manual_mode, manual_contract_type, manual_barrier, manual_duration, is_ai_scanning,
+        use_second_trigger, is_manual_mode, manual_contract_type, manual_barrier, manual_duration, rise_fall_v2_duration, is_ai_scanning,
         recovery_contract_type, recovery_barrier, use_recovery_delay, is_recovery_enabled,
         recovery_entry_digit, recovery_second_entry_digit,
         is_turbo, selected_symbol, debug_info, is_analyzing_volatility, is_authorizing,
@@ -163,7 +163,7 @@ const OverUnder = observer(() => {
         is_trigger_enabled,
         setStake, setMartingale, setIsVolatilityChanger,
         setIsDiffersMode, setIsDiffersV2Mode, setIsTatuBoraMode, setIsNneKwishaMode, setIsAllVolMode, setIs2termMode, setIsRiseFallMode, setIsRiseFallV2Mode, setIsAutomate,
-        setUseSecondTrigger, setIsManualMode, setManualContractType, setManualBarrier, setManualDuration,
+        setUseSecondTrigger, setIsManualMode, setManualContractType, setManualBarrier, setManualDuration, setRiseFallV2Duration,
         setRecoveryContractType, setRecoveryBarrier, setUseRecoveryDelay, setIsRecoveryEnabled,
         setRecoveryEntryDigit, setRecoverySecondEntryDigit,
         setIsTurbo, setSelectedSymbol, connectWebSocket, handleStartStop, clearDebug,
@@ -548,6 +548,20 @@ const OverUnder = observer(() => {
                                     <div className='ou-grid' style={{ marginTop: 8 }}>
                                         <SwitchTile label='Auto Switch Volatility' on={is_volatility_changer} onToggle={() => setIsVolatilityChanger(!is_volatility_changer)} disabled={disabled} color='#06b6d4' />
                                         <SwitchTile label='All Volatilities' on={is_all_vol_mode} onToggle={() => setIsAllVolMode(!is_all_vol_mode)} disabled={disabled} color='#06b6d4' />
+                                    </div>
+                                    <div className='ou-grid' style={{ marginTop: 8 }}>
+                                        <div className='ou-f'>
+                                            <span className='ou-fl'>Duration (Ticks)</span>
+                                            <input
+                                                className='ou-inp ou-inp--full'
+                                                type='number'
+                                                min='1'
+                                                max='10'
+                                                value={rise_fall_v2_duration}
+                                                onChange={e => setRiseFallV2Duration(Number(e.target.value))}
+                                                disabled={disabled}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             )}

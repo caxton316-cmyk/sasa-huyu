@@ -1,41 +1,26 @@
-
 /*
- * This is a utility file for handling the OAuth2 PKCE flow with Deriv's new authentication system.
+ * PKCE (Proof Key for Code Exchange) helper for Deriv's new auth system.
  *
- * The PKCE (Proof Key for Code Exchange) flow is a more secure way to handle OAuth2 for public clients
- * (like this web app) than the older implicit flow.
- *
- * For a detailed guide on the PKCE flow, see: https://www.oauth.com/oauth2-servers/pkce/
- *
- * The flow for this app is as follows:
- *
- *   1. GET https://auth.deriv.com/oauth2/authorize
- *        response_type=code
- *        client_id=337DJLKi2OJ4VsyFSLIt9
- *        code_challenge=<c>
- *        code_challenge_method=S256
- *
- *   2. POST https://auth.deriv.com/oauth2/token
- *        grant_type=authorization_code
- *        code=<code from URL>
- *        redirect_uri=https://makotitraderss.vercel.app/callback
- *        client_id=337DJLKi2OJ4VsyFSLIt9
- *        code_verifier=<v>
- *
- *   3. POST https://auth.deriv.com/oauth2/legacy/tokens
- *        Authorization: Bearer <access_token from step 2>
- *
- *   4. Store resulting acct1/token1/cur1 tokens and redirect to app
+ * Flow:
+ *   1. Generate code_verifier (random) + code_challenge = BASE64URL(SHA256(verifier))
+ *   2. Store verifier + random state in localStorage for CSRF protection
+ *   3. Redirect to https://auth.deriv.com/oauth2/auth with all PKCE params
+ *   4. On callback (/callback route):
+ *      a. Verify returned state matches stored state
+ *      b. Exchange code for access_token via POST to auth.deriv.com/oauth2/token
+ *         (browser-side — auth.deriv.com allows CORS for PKCE public clients)
+ *      c. Fetch legacy Deriv tokens via POST to auth.deriv.com/oauth2/legacy/tokens
+ *      d. Store resulting tokens and redirect to app
  *
  * Uses Web Crypto API — available in all modern browsers on HTTPS.
  */
 
-const PKCE_LOCAL_STORAGE_KEY = 'pkce_verifier';
+export const PKCE_VERIFIER_KEY = 'pkce_verifier';
+export const PKCE_STATE_KEY    = 'pkce_state';
+export const PKCE_CLIENT_ID    = '337DJLKi2OJ4VsyFSLIt9';
 
 function sha256(plain: string): Promise<ArrayBuffer> {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(plain);
-    return window.crypto.subtle.digest('SHA-256', data);
+    return window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(plain));
 }
 
 function base64url(buffer: ArrayBuffer): string {
@@ -46,29 +31,35 @@ function base64url(buffer: ArrayBuffer): string {
 }
 
 async function getCodeChallenge(): Promise<{ verifier: string; challenge: string }> {
-    const random = window.crypto.getRandomValues(new Uint8Array(32));
-    const verifier = base64url(random.buffer);
+    const rand      = window.crypto.getRandomValues(new Uint8Array(32));
+    const verifier  = base64url(rand.buffer);
     const challenge = base64url(await sha256(verifier));
     return { verifier, challenge };
 }
 
-const REDIRECT_URI = 'https://makotitraderss.vercel.app/callback';
+function randomState(): string {
+    const arr = window.crypto.getRandomValues(new Uint8Array(16));
+    return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+}
 
-export async function redirectToNewAccountsLogin() {
+export async function redirectToNewAccountsLogin(): Promise<void> {
     const { verifier, challenge } = await getCodeChallenge();
+    const state        = randomState();
+    const redirect_uri = `${window.location.origin}/callback`;
 
-    localStorage.setItem(PKCE_LOCAL_STORAGE_KEY, verifier);
+    // Store verifier and state so the callback page can verify and exchange
+    localStorage.setItem(PKCE_VERIFIER_KEY, verifier);
+    localStorage.setItem(PKCE_STATE_KEY,    state);
 
-    const state = Math.random().toString(36).substring(2, 15);
+    const url = new URL('https://auth.deriv.com/oauth2/auth');
+    url.searchParams.set('response_type',         'code');
+    url.searchParams.set('client_id',             PKCE_CLIENT_ID);
+    url.searchParams.set('redirect_uri',          redirect_uri);
+    url.searchParams.set('scope',                 'trade');
+    url.searchParams.set('state',                 state);
+    url.searchParams.set('code_challenge',        challenge);
+    url.searchParams.set('code_challenge_method', 'S256');
+    url.searchParams.set('prompt',                'login');
 
-    const new_auth_url = new URL('https://auth.deriv.com/oauth2/auth');
-    new_auth_url.searchParams.set('response_type', 'code');
-    new_auth_url.searchParams.set('client_id', '337DJLKi2OJ4VsyFSLIt9');
-    new_auth_url.searchParams.set('redirect_uri', REDIRECT_URI);
-    new_auth_url.searchParams.set('scope', 'trade');
-    new_auth_url.searchParams.set('state', state);
-    new_auth_url.searchParams.set('code_challenge', challenge);
-    new_auth_url.searchParams.set('code_challenge_method', 'S256');
-
-    window.location.assign(new_auth_url.toString());
+    window.location.assign(url.toString());
 }

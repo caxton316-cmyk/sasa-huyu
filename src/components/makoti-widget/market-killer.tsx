@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ALL_SYMBOLS, SYMBOL_LABELS, PIP_SIZES, openMakotiWS, MakotiWS, analyzeSignal } from './makoti-ws';
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
@@ -8,8 +8,7 @@ interface SymbolState {
     lastSignal: string;
     wins: number;
     losses: number;
-    currentStake: number;
-    ready: boolean;       // true once we have enough history
+    ready: boolean;
 }
 
 interface LogEntry {
@@ -19,16 +18,32 @@ interface LogEntry {
 }
 
 /* ── Constants ─────────────────────────────────────────────────────────────── */
-const MAX_TICKS              = 1000;  // mirror over-under-store MAX_TICKS
-const MIN_TICKS_BEFORE_TRADE = 30;   // RSI(7) + BB(14) need ~15-20 prices; 30 is safe
-const CONFIDENCE_THRESHOLD   = 72;   // new multi-indicator engine is more selective
+const MAX_TICKS              = 1000;
+const MIN_TICKS_BEFORE_TRADE = 30;
+const CONFIDENCE_THRESHOLD   = 72;
+const LS_LOGS_KEY            = 'mw_mk_logs';
+const MAX_SAVED_LOGS         = 80;
+
+function loadSavedLogs(): LogEntry[] {
+    try {
+        const raw = localStorage.getItem(LS_LOGS_KEY);
+        return raw ? (JSON.parse(raw) as LogEntry[]) : [];
+    } catch {
+        return [];
+    }
+}
+
+function saveLogs(logs: LogEntry[]) {
+    try {
+        localStorage.setItem(LS_LOGS_KEY, JSON.stringify(logs.slice(0, MAX_SAVED_LOGS)));
+    } catch {}
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    MarketKiller
-   ONE trade active at a time globally. Each incoming tick from every
-   volatility is evaluated; the first symbol that produces a signal with
-   confidence ≥ threshold fires a trade. All other symbols wait until that
-   contract settles before the next trade can be placed.
+   ONE trade active at a time globally. The martingale stake is GLOBAL:
+   after any loss the next trade (on any symbol) uses the multiplied stake;
+   after any win the stake resets to base.
 ═══════════════════════════════════════════════════════════════════════════ */
 export const MarketKiller: React.FC = () => {
     const [stake,       setStake]       = useState('0.35');
@@ -37,7 +52,7 @@ export const MarketKiller: React.FC = () => {
     const [stopLoss,    setStopLoss]    = useState('5');
     const [running,     setRunning]     = useState(false);
     const [pnl,         setPnl]         = useState(0);
-    const [logs,        setLogs]        = useState<LogEntry[]>([]);
+    const [logs,        setLogs]        = useState<LogEntry[]>(loadSavedLogs);
     const [activeContracts, setActiveContracts] = useState(0);
     const [symbolDisplay, setSymbolDisplay] = useState<
         Record<string, { lastSignal: string; wins: number; losses: number; stake: number }>
@@ -53,15 +68,31 @@ export const MarketKiller: React.FC = () => {
     const tpRef            = useRef(10);
     const slRef            = useRef(5);
 
-    // Global one-at-a-time lock — only ONE trade active across all symbols
-    const globalLock       = useRef(false);
+    // Global one-at-a-time lock
+    const globalLock         = useRef(false);
     const activeContractsRef = useRef(0);
-    const contractMapRef   = useRef<Map<string, { symbol: string; stake: number }>>(new Map());
+
+    // GLOBAL martingale stake — shared across ALL symbols
+    const globalStakeRef     = useRef(0.35);
+    const contractMapRef     = useRef<Map<string, { symbol: string; stake: number }>>(new Map());
+
+    /* ── Persist logs to localStorage whenever they change ─────────────── */
+    useEffect(() => {
+        saveLogs(logs);
+    }, [logs]);
 
     /* ── Log helper ──────────────────────────────────────────────────────── */
     const addLog = useCallback((msg: string, type: LogEntry['type'] = 'info') => {
         const time = new Date().toLocaleTimeString();
-        setLogs(prev => [{ time, msg, type }, ...prev].slice(0, 120));
+        setLogs(prev => {
+            const next = [{ time, msg, type }, ...prev].slice(0, 120);
+            return next;
+        });
+    }, []);
+
+    const clearLogs = useCallback(() => {
+        setLogs([]);
+        localStorage.removeItem(LS_LOGS_KEY);
     }, []);
 
     /* ── Flush symbol display state ──────────────────────────────────────── */
@@ -70,7 +101,12 @@ export const MarketKiller: React.FC = () => {
         if (!sd) return;
         setSymbolDisplay(prev => ({
             ...prev,
-            [sym]: { lastSignal: sd.lastSignal, wins: sd.wins, losses: sd.losses, stake: sd.currentStake },
+            [sym]: {
+                lastSignal: sd.lastSignal,
+                wins: sd.wins,
+                losses: sd.losses,
+                stake: globalStakeRef.current,
+            },
         }));
     }, []);
 
@@ -101,7 +137,7 @@ export const MarketKiller: React.FC = () => {
         addLog('Market Killer stopped.', 'info');
     }, [addLog]);
 
-    /* ── Execute ONE trade ───────────────────────────────────────────────── */
+    /* ── Execute ONE trade using the global stake ────────────────────────── */
     const executeTrade = useCallback((sym: string) => {
         if (!runningRef.current || !wsRef.current?.isOpen()) return;
         const sd = symbolDataRef.current[sym];
@@ -116,7 +152,8 @@ export const MarketKiller: React.FC = () => {
         setActiveContracts(1);
 
         const { contract_type, barrier, reason, confidence } = signal;
-        const tradeStake = Number(sd.currentStake.toFixed(2));
+        // Use the GLOBAL stake (shared across all symbols — martingale persists across symbols)
+        const tradeStake = Number(globalStakeRef.current.toFixed(2));
 
         const params: any = {
             amount: tradeStake, basis: 'stake', currency: 'USD',
@@ -133,15 +170,15 @@ export const MarketKiller: React.FC = () => {
 
         sd.lastSignal = label;
         addLog(`🎯 [${confidence.toFixed(0)}%] ${SYMBOL_LABELS[sym]}: ${label} @ $${tradeStake} — ${reason}`, 'trade');
+        contractMapRef.current.set(sym + Date.now(), { symbol: sym, stake: tradeStake });
         flushDisplay(sym);
     }, [addLog, flushDisplay]);
 
     /* ── Handle every incoming tick: scan all symbols, pick best signal ─── */
-    const onTickReceived = useCallback((sym: string) => {
+    const onTickReceived = useCallback(() => {
         if (!runningRef.current) return;
-        if (globalLock.current)  return;   // one trade in flight — wait
+        if (globalLock.current)  return;
 
-        // Evaluate ALL symbols, pick the one with the highest confidence signal
         let bestSym  = '';
         let bestConf = CONFIDENCE_THRESHOLD - 1;
 
@@ -172,19 +209,19 @@ export const MarketKiller: React.FC = () => {
         pnlRef.current           = 0;
         globalLock.current       = false;
         activeContractsRef.current = 0;
+        globalStakeRef.current   = stakeVal;   // reset global stake to base
 
         setPnl(0);
-        setLogs([]);
         setActiveContracts(0);
         setSymbolDisplay({});
         contractMapRef.current = new Map();
 
-        // Initialize per-symbol state
+        // Initialize per-symbol state (preserve wins/losses if already ran)
         symbolDataRef.current = {};
         ALL_SYMBOLS.forEach(sym => {
             symbolDataRef.current[sym] = {
                 ticks: [], prices: [], lastSignal: '—',
-                wins: 0, losses: 0, currentStake: stakeVal, ready: false,
+                wins: 0, losses: 0, ready: false,
             };
         });
 
@@ -200,7 +237,6 @@ export const MarketKiller: React.FC = () => {
         const handleMsg = (data: any) => {
             if (!runningRef.current) return;
 
-            // Handle errors
             if (data.error) {
                 if (data.msg_type === 'buy') {
                     addLog(`Buy error: ${data.error.message}`, 'info');
@@ -213,7 +249,6 @@ export const MarketKiller: React.FC = () => {
 
             switch (data.msg_type) {
 
-                /* ── Initial tick history ─────────────────────────────── */
                 case 'history': {
                     const sym: string = data.echo_req?.ticks_history;
                     if (!sym || !symbolDataRef.current[sym]) return;
@@ -228,7 +263,6 @@ export const MarketKiller: React.FC = () => {
                     break;
                 }
 
-                /* ── Live tick ────────────────────────────────────────── */
                 case 'tick': {
                     const tick     = data.tick;
                     const sym: string = tick.symbol;
@@ -238,17 +272,14 @@ export const MarketKiller: React.FC = () => {
                     const price = Number(tick.quote);
                     const digit = Number(price.toFixed(pip).slice(-1));
 
-                    // Append to rolling window (mirror over-under-store slice pattern)
                     sd.ticks  = [...sd.ticks.slice(-(MAX_TICKS - 1)), digit];
                     sd.prices = [...sd.prices.slice(-(MAX_TICKS - 1)), price];
                     sd.ready  = sd.ticks.length >= MIN_TICKS_BEFORE_TRADE;
 
-                    // On every tick, check if any symbol now has a great signal
-                    onTickReceived(sym);
+                    onTickReceived();
                     break;
                 }
 
-                /* ── Buy confirmation ─────────────────────────────────── */
                 case 'buy': {
                     const sym: string = data.echo_req?.parameters?.symbol;
                     if (!sym) return;
@@ -259,13 +290,11 @@ export const MarketKiller: React.FC = () => {
                         return;
                     }
                     const cid = String(data.buy.contract_id);
-                    const sd  = symbolDataRef.current[sym];
-                    contractMapRef.current.set(cid, { symbol: sym, stake: sd?.currentStake ?? stakeParsed.current });
+                    contractMapRef.current.set(cid, { symbol: sym, stake: globalStakeRef.current });
                     addLog(`Contract ${cid} open on ${SYMBOL_LABELS[sym]}`, 'info');
                     break;
                 }
 
-                /* ── Contract settled ─────────────────────────────────── */
                 case 'proposal_open_contract': {
                     const c = data.proposal_open_contract;
                     if (!c?.is_sold) return;
@@ -285,21 +314,21 @@ export const MarketKiller: React.FC = () => {
 
                     if (won) {
                         sd.wins++;
-                        sd.currentStake = stakeParsed.current;     // reset to base stake on win
-                        addLog(`✅ WON +$${profit.toFixed(2)} on ${SYMBOL_LABELS[sym]} | P&L $${pnlRef.current.toFixed(2)}`, 'win');
+                        // Win → reset GLOBAL stake back to base
+                        globalStakeRef.current = stakeParsed.current;
+                        addLog(`✅ WON +$${profit.toFixed(2)} on ${SYMBOL_LABELS[sym]} | Next stake reset to $${stakeParsed.current.toFixed(2)} | P&L $${pnlRef.current.toFixed(2)}`, 'win');
                     } else {
                         sd.losses++;
-                        // Martingale: multiply stake, cap at 100
-                        sd.currentStake = Math.min(
+                        // Loss → multiply GLOBAL stake (applies to the NEXT trade on ANY symbol)
+                        globalStakeRef.current = Math.min(
                             Number((tradeStake * martingaleParsed.current).toFixed(2)),
                             100
                         );
-                        addLog(`❌ LOST -$${Math.abs(profit).toFixed(2)} on ${SYMBOL_LABELS[sym]} | Next stake $${sd.currentStake.toFixed(2)} | P&L $${pnlRef.current.toFixed(2)}`, 'loss');
+                        addLog(`❌ LOST -$${Math.abs(profit).toFixed(2)} on ${SYMBOL_LABELS[sym]} | Next stake $${globalStakeRef.current.toFixed(2)} | P&L $${pnlRef.current.toFixed(2)}`, 'loss');
                     }
 
                     flushDisplay(sym);
 
-                    // Release global lock — next tick across any symbol can fire a trade
                     globalLock.current = false;
                     activeContractsRef.current = 0;
                     setActiveContracts(0);
@@ -315,9 +344,7 @@ export const MarketKiller: React.FC = () => {
             handleMsg,
             () => {
                 addLog('Connected ✓  Subscribing to all 10 volatilities…', 'info');
-                // Subscribe to live contract updates
                 mws.send({ proposal_open_contract: 1, subscribe: 1 });
-                // Load 1000-tick history + subscribe to live ticks for every symbol
                 ALL_SYMBOLS.forEach(sym => {
                     mws.send({ ticks_history: sym, count: 1000, end: 'latest', style: 'ticks', subscribe: 1 });
                 });
@@ -377,7 +404,7 @@ export const MarketKiller: React.FC = () => {
             {/* ── One-at-a-time notice ── */}
             {running && (
                 <div className='mw-killer__mode-note'>
-                    One trade at a time — waits for contract to settle before next entry
+                    Global martingale — next stake applies to any symbol after a loss
                     {activeContracts > 0 && <span className='mw-killer__active-dot'> ● TRADE LIVE</span>}
                 </div>
             )}
@@ -396,7 +423,7 @@ export const MarketKiller: React.FC = () => {
                 </div>
             )}
 
-            {/* ── Per-symbol rows (only symbols that traded) ── */}
+            {/* ── Per-symbol rows ── */}
             {Object.keys(symbolDisplay).length > 0 && (
                 <div className='mw-killer__symbols'>
                     {ALL_SYMBOLS.filter(s => symbolDisplay[s]).map(sym => {
@@ -424,13 +451,19 @@ export const MarketKiller: React.FC = () => {
 
             {/* ── Log ── */}
             {logs.length > 0 && (
-                <div className='mw-killer__log'>
-                    {logs.map((l, i) => (
-                        <div key={i} className={`mw-log-line mw-log-line--${l.type}`}>
-                            <span className='mw-log-time'>{l.time}</span>
-                            <span className='mw-log-msg'>{l.msg}</span>
-                        </div>
-                    ))}
+                <div className='mw-killer__log-wrap'>
+                    <div className='mw-killer__log-header'>
+                        <span className='mw-killer__log-title'>Activity Log</span>
+                        <button className='mw-btn-clear' onClick={clearLogs} title='Clear log'>Clear</button>
+                    </div>
+                    <div className='mw-killer__log'>
+                        {logs.map((l, i) => (
+                            <div key={i} className={`mw-log-line mw-log-line--${l.type}`}>
+                                <span className='mw-log-time'>{l.time}</span>
+                                <span className='mw-log-msg'>{l.msg}</span>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
         </div>

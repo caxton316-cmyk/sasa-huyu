@@ -244,15 +244,3 @@
     }
 }
 
-// Remove run panel overrides that conflict with the new theme
-.run-panel .dc-tabs__item,
-.run-panel .dc-tabs__active,
-.run-panel .dc-tabs__item:not(.dc-tabs__active) {
-    color: inherit !important;
-    font-weight: inherit !important;
-
-    * {
-        color: inherit !important;
-        font-weight: inherit !important;
-    }
-}

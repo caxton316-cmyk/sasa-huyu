@@ -7,9 +7,8 @@ import { clearAuthData } from '@/utils/auth-utils';
 import { Callback } from '@deriv-com/auth-client';
 import { Button } from '@deriv-com/ui';
 
-const PKCE_LOCAL_STORAGE_KEY = 'pkce_verifier';
-const PKCE_CLIENT_ID = '337DJLKi2OJ4VsyFSLIt9';
-const PKCE_REDIRECT_URI = 'https://makotitraderss.vercel.app/callback';
+import { PKCE_VERIFIER_KEY, PKCE_STATE_KEY, PKCE_CLIENT_ID } from '@/utils/pkce';
+const PKCE_LOCAL_STORAGE_KEY = PKCE_VERIFIER_KEY;
 
 const getSelectedCurrency = (
     tokens: Record<string, string>,
@@ -42,34 +41,58 @@ const PkceCallbackHandler = () => {
                 const code = params.get('code');
                 const verifier = localStorage.getItem(PKCE_LOCAL_STORAGE_KEY);
 
-                if (!code) throw new Error('No authorization code found in URL.');
-                if (!verifier) throw new Error('PKCE verifier missing. Please try logging in again.');
+                const returnedState = params.get('state');
+                const storedState   = localStorage.getItem(PKCE_STATE_KEY);
 
-                const loginRes = await fetch('/api/pkce-login', {
+                if (!code)     throw new Error('No authorization code found in URL.');
+                if (!verifier) throw new Error('PKCE verifier missing. Please try logging in again.');
+                if (storedState && returnedState && storedState !== returnedState) {
+                    throw new Error('State mismatch — possible CSRF. Please try logging in again.');
+                }
+
+                const redirect_uri = `${window.location.origin}/callback`;
+
+                // Step 1: Exchange code for access_token directly in the browser.
+                // auth.deriv.com is a PKCE-capable auth server and allows CORS for this endpoint.
+                const tokenRes = await fetch('https://auth.deriv.com/oauth2/token', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        grant_type:    'authorization_code',
                         code,
-                        redirect_uri: PKCE_REDIRECT_URI,
-                        client_id: PKCE_CLIENT_ID,
+                        client_id:     PKCE_CLIENT_ID,
+                        redirect_uri,
                         code_verifier: verifier,
-                    }),
+                    }).toString(),
                 });
 
-                if (!loginRes.ok) {
-                    let errBody = '';
-                    try {
-                        const errJson = await loginRes.json();
-                        errBody = errJson.error + (errJson.detail ? `: ${errJson.detail}` : '');
-                    } catch (_) {
-                        try { errBody = await loginRes.text(); } catch (__) {}
-                    }
-                    throw new Error(`Login failed (HTTP ${loginRes.status}): ${errBody}`);
+                if (!tokenRes.ok) {
+                    const errBody = await tokenRes.text().catch(() => '');
+                    throw new Error(`Token exchange failed (HTTP ${tokenRes.status}): ${errBody}`);
+                }
+
+                const tokenData   = await tokenRes.json();
+                const accessToken = tokenData.access_token as string | undefined;
+                if (!accessToken) throw new Error('No access_token in token response.');
+
+                // Step 2: Fetch legacy Deriv tokens using the access_token
+                const legacyRes = await fetch('https://auth.deriv.com/oauth2/legacy/tokens', {
+                    method: 'POST',
+                    headers: {
+                        Authorization:  `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+
+                if (!legacyRes.ok) {
+                    const errBody = await legacyRes.text().catch(() => '');
+                    throw new Error(`Legacy tokens failed (HTTP ${legacyRes.status}): ${errBody}`);
                 }
 
                 localStorage.removeItem(PKCE_LOCAL_STORAGE_KEY);
+                localStorage.removeItem(PKCE_STATE_KEY);
 
-                const legacyData = await loginRes.json();
+                const legacyData = await legacyRes.json();
                 const tokens: Record<string, string> = legacyData.tokens ?? legacyData;
 
                 const accountsList: Record<string, string> = {};

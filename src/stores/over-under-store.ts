@@ -77,6 +77,7 @@ export default class OverUnderStore {
     is_2term_mode = false;
     is_rise_fall_mode = false;
     is_rise_fall_v2_mode = false;
+    rise_fall_v2_duration = 1;
     last_profit = 0;
     differs_predicted_top4: number[] = [];
     differs_v2_predicted_digit: number | null = null;
@@ -162,6 +163,7 @@ export default class OverUnderStore {
             is_2term_mode: observable,
             is_rise_fall_mode: observable,
             is_rise_fall_v2_mode: observable,
+            rise_fall_v2_duration: observable,
             is_differs_v2_mode: observable,
             is_tatu_bora_mode: observable,
             is_nne_kwisha_mode: observable,
@@ -181,6 +183,7 @@ export default class OverUnderStore {
             setStake: action.bound,
             setIsRiseFallMode: action.bound,
             setIsRiseFallV2Mode: action.bound,
+            setRiseFallV2Duration: action.bound,
             setIs2termMode: action.bound,
             setMartingale: action.bound,
             setIsVolatilityChanger: action.bound,
@@ -503,6 +506,7 @@ export default class OverUnderStore {
     setIs2termMode(value: boolean) { this.is_2term_mode = value; }
     setIsRiseFallMode(value: boolean) { this.is_rise_fall_mode = value; }
     setIsRiseFallV2Mode(value: boolean) { this.is_rise_fall_v2_mode = value; }
+    setRiseFallV2Duration(value: number) { this.rise_fall_v2_duration = Math.max(1, Math.min(10, value)); }
     setIsAutomate(value: boolean) { this.is_automate = value; }
     setUseSecondTrigger(value: boolean) { this.use_second_trigger = value; }
     setIsManualMode(value: boolean) { this.is_manual_mode = value; }
@@ -1377,7 +1381,8 @@ export default class OverUnderStore {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !is_logged_in) return;
         this.symbol_locks[symbol] = true;
         const tradeAmount = Number(this.stake.toFixed(2));
-        this.addLog(`Rise/Fall V2 Trade: ${contract_type === 'CALL' ? 'RISE' : 'FALL'} @ $${tradeAmount} on ${symbol} (1 tick)`);
+        const rfv2Duration = this.rise_fall_v2_duration || 1;
+        this.addLog(`Rise/Fall V2 Trade: ${contract_type === 'CALL' ? 'RISE' : 'FALL'} @ $${tradeAmount} on ${symbol} (${rfv2Duration} tick${rfv2Duration > 1 ? 's' : ''})`);
         this.ws.send(JSON.stringify({
             buy: 1,
             price: tradeAmount,
@@ -1385,7 +1390,7 @@ export default class OverUnderStore {
                 amount: tradeAmount,
                 basis: 'stake',
                 currency: 'USD',
-                duration: 1,
+                duration: rfv2Duration,
                 duration_unit: 't',
                 symbol,
                 contract_type,

@@ -7,8 +7,8 @@ type Tab = 'scanner' | 'market_killer';
 const PAD = 8;
 
 export const MakotiWidget: React.FC = () => {
-    const [open, setOpen]         = useState(false);
-    const [tab, setTab]           = useState<Tab>('scanner');
+    const [open, setOpen]         = useState(() => localStorage.getItem('mw_open') === 'true');
+    const [tab, setTab]           = useState<Tab>(() => (localStorage.getItem('mw_tab') as Tab) || 'scanner');
     const [minimized, setMinimized] = useState(false);
 
     /* ── FAB position ─────────────────────────────────────── */
@@ -22,6 +22,10 @@ export const MakotiWidget: React.FC = () => {
         x: Math.max(PAD, window.innerWidth  - 420),
         y: Math.max(PAD, window.innerHeight - 640),
     }));
+
+    /* ── Persist open / tab state to localStorage ─────────── */
+    useEffect(() => { localStorage.setItem('mw_open', String(open)); }, [open]);
+    useEffect(() => { localStorage.setItem('mw_tab',  tab);          }, [tab]);
 
     /* ── Drag state (refs, never cause re-renders) ─────────── */
     const btnDragging  = useRef(false);
