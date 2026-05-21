@@ -285,9 +285,12 @@ const CallbackPage = () => {
     const hasOldTokens = urlParams.has('token1') || urlParams.has('acct1')
     
     // New system detection - check multiple signals
-    const hasNewAuthActive = sessionStorage.getItem('NEW_AUTH_active') === 'true'
-    const hasNewVerifier = !!sessionStorage.getItem('NEW_AUTH_verifier')
-    const hasNewState = !!sessionStorage.getItem('NEW_AUTH_state')
+    const hasNewVerifier = 
+      !!localStorage.getItem('NEW_AUTH_verifier')
+    const hasNewState = 
+      !!localStorage.getItem('NEW_AUTH_state')
+    const hasNewAuthActive = 
+      localStorage.getItem('NEW_AUTH_active') === 'true'
     
     // If URL has ?code= and ANY new system signal exists → new system
     const isNewSystemCallback = hasCode && 

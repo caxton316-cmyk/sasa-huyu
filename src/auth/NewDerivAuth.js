@@ -17,7 +17,14 @@ const K = {
 }
 
 function clearNewAuthStorage() {
-  Object.values(K).forEach(k => sessionStorage.removeItem(k))
+  sessionStorage.removeItem(K.token);
+  sessionStorage.removeItem(K.expiry);
+  localStorage.removeItem(K.verifier);
+  localStorage.removeItem(K.state);
+  localStorage.removeItem(K.active);
+  sessionStorage.removeItem(K.verifier);
+  sessionStorage.removeItem(K.state);
+  sessionStorage.removeItem(K.active);
 }
 
 async function buildCodeChallenge(verifier) {
@@ -48,20 +55,20 @@ export async function startNewLogin() {
   const challenge = await buildCodeChallenge(verifier)
   const state = crypto.randomUUID()
   
-  sessionStorage.setItem(K.verifier, verifier)
-  sessionStorage.setItem(K.state, state)
-  sessionStorage.setItem(K.active, "true")
+  localStorage.setItem(K.verifier, verifier)
+  localStorage.setItem(K.state, state)
+  localStorage.setItem(K.active, "true")
 
   // Verify values were actually saved
-  const savedVerifier = sessionStorage.getItem('NEW_AUTH_verifier')
-  const savedActive = sessionStorage.getItem('NEW_AUTH_active')
+  const savedVerifier = localStorage.getItem('NEW_AUTH_verifier')
+  const savedActive = localStorage.getItem('NEW_AUTH_active')
   
   console.log('[NEW AUTH] Pre-redirect verification:')
   console.log('[NEW AUTH] verifier saved:', !!savedVerifier)
   console.log('[NEW AUTH] active saved:', savedActive)
   
   if (!savedVerifier) {
-    throw new Error('Failed to save login data to sessionStorage. ' +
+    throw new Error('Failed to save login data to localStorage. ' +
       'Your browser may be blocking storage. Try disabling ' +
       'private browsing or browser extensions.')
   }
@@ -99,7 +106,7 @@ export async function handleNewCallback() {
   
   window.history.replaceState({}, '', '/callback')
   
-  if (!sessionStorage.getItem(K.active)) {
+  if (!localStorage.getItem(K.active)) {
     console.log("[NEW AUTH] Not a new system callback, skipping")
     return null
   }
@@ -112,7 +119,7 @@ export async function handleNewCallback() {
     throw new Error("Missing state parameter from Deriv")
   }
   
-  const savedState = sessionStorage.getItem(K.state)
+  const savedState = localStorage.getItem(K.state)
   
   if (!savedState) {
     throw new Error(
@@ -130,9 +137,7 @@ export async function handleNewCallback() {
     )
   }
   
-  sessionStorage.removeItem(K.state)
-  
-  const verifier = sessionStorage.getItem(K.verifier)
+  const verifier = localStorage.getItem(K.verifier)
   
   if (!verifier) {
     throw new Error(
@@ -173,6 +178,9 @@ export async function handleNewCallback() {
     const errMsg = data.error_description || data.error || 
       "Unknown error"
     console.error("[NEW AUTH] Token error:", errMsg)
+    localStorage.removeItem(K.verifier)
+    localStorage.removeItem(K.state)
+    localStorage.removeItem(K.active)
     throw new Error("Login failed: " + errMsg)
   }
   
@@ -183,7 +191,9 @@ export async function handleNewCallback() {
     K.expiry,
     String(Date.now() + (data.expires_in * 1000))
   )
-  sessionStorage.removeItem(K.verifier)
+  localStorage.removeItem(K.verifier)
+  localStorage.removeItem(K.state)
+  localStorage.removeItem(K.active)
   
   console.log("[NEW AUTH] Token saved. Login complete.")
   
