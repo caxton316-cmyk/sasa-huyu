@@ -116,27 +116,6 @@ export const useOauth2 = ({
         if (!isNewLoggedIn()) {
             window.location.replace('/');
         }
-            } catch { /* client state reset can fail silently */ }
-
-            if (isNewLoggedIn()) {
-                // New auth redirects to Deriv OIDC session logout
-                const { logoutNewSystem } = await import('@/auth/NewDerivAuth');
-                logoutNewSystem();
-            } else {
-                // Legacy OAuth2 logout via deriv-com/auth-client
-                OAuth2Logout({
-                    redirectCallbackUri: `${window.location.origin}/callback`,
-                    WSLogoutAndRedirect: handleLogout ?? (() => Promise.resolve()),
-                    postLogoutRedirectUri: window.location.origin,
-                }).catch(() => {});
-            }
-
-            client?.logout().catch(() => {});
-        } catch { /* safety net — nothing should block the redirect below */ }
-
-        if (!isNewLoggedIn()) {
-            window.location.replace('/');
-        }
     };
     const retriggerOAuth2Login = async () => {
         try {
