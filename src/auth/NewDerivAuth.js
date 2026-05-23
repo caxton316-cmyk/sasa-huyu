@@ -547,6 +547,14 @@ export async function createNewWebSocket() {
     } catch(e) {
       console.warn("[NEW WS] Could not wire legacy auth state:", e)
     }
+
+    // Subscribe to balance updates so CoreStoreProvider.handleMessages receives
+    // live balance via the api-base.ts OTP WS bridge → api.onMessage() → all_accounts_balance.
+    try {
+      ws.send(JSON.stringify({ balance: 1, subscribe: 1 }))
+    } catch(e) {
+      console.warn("[NEW WS] Could not subscribe to balance:", e)
+    }
   }
   
   // Dispatch messages to all registered handlers (survives reconnection)

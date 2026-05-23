@@ -351,11 +351,23 @@ class APIBase {
             } catch (_) {}
         });
 
-        // Override send() – route through OTP WS when connected
+        // Override send() – route trade messages through OTP WS when connected.
+        // Non-trade messages (active_symbols, contracts_for, ticks, etc.) always
+        // go through the legacy WS so the bot builder config loads correctly.
+        const TRADE_MSG_TYPES = new Set([
+            'proposal', 'buy', 'sell',
+            'proposal_open_contract', 'balance', 'transaction',
+            'forget', 'forget_all',
+        ]);
         const originalSend = originalApi.send.bind(originalApi);
         originalApi.send = (data) => {
             if (isNewLoggedIn() && window._newSystemWS?.readyState === WebSocket.OPEN) {
-                return sendViaNewSystemWithPromise(data);
+                if (data && typeof data === 'object') {
+                    const firstKey = Object.keys(data)[0];
+                    if (TRADE_MSG_TYPES.has(firstKey)) {
+                        return sendViaNewSystemWithPromise(data);
+                    }
+                }
             }
             return originalSend(data);
         };
