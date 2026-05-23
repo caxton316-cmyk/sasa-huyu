@@ -119,10 +119,6 @@ class MakotiMagicStore {
     }
 
     connectWebSocket = () => {
-        if (isNewLoggedIn()) {
-            console.log('[MakotiMagic] New auth user - skipping legacy WS connection');
-            return;
-        }
         if (this.ws && this.ws.readyState === WebSocket.OPEN && this.is_initialized) {
             return;
         }

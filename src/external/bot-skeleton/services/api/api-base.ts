@@ -22,6 +22,11 @@ import {
 } from './appId';
 import { getAppId } from '@/components/shared';
 import chart_api from './chart-api';
+import {
+    isNewLoggedIn,
+    sendViaNewSystemWithPromise,
+    onNewSystemMessage,
+} from '@/auth/NewDerivAuth';
 
 type CurrentSubscription = {
     id: string;
@@ -107,6 +112,11 @@ class APIBase {
             this.api = generateDerivApiInstance();
             this.api?.connection.addEventListener('open', this.onsocketopen.bind(this));
             this.api?.connection.addEventListener('close', this.onsocketclose.bind(this));
+
+            // For new auth users, route bot-skeleton sends through the OTP WS
+            if (isNewLoggedIn()) {
+                this._setupNewSystemApiProxy();
+            }
         }
 
         if (!this.has_active_symbols && !V2GetActiveToken()) {
@@ -310,6 +320,66 @@ class APIBase {
             this.init(true);
         }
     };
+
+    /** @type {(() => void) | null} */
+    _newSystemProxyCleanup = null;
+
+    /**
+     * When the new auth system is active, wrap `api.send` and `api.onMessage`
+     * so bot-skeleton messages (proposal, buy, sell, poc, etc.) route through
+     * the OTP WebSocket instead of the (unauthorized) legacy WS.
+     */
+    _setupNewSystemApiProxy() {
+        // Tear down any previous proxy (e.g. after a force-recreate)
+        if (this._newSystemProxyCleanup) {
+            this._newSystemProxyCleanup();
+            this._newSystemProxyCleanup = null;
+        }
+
+        const originalApi = this.api;
+        if (!originalApi) return;
+
+        // Callback set that subscribers registered via onMessage() will receive
+        // OTP WS messages in addition to legacy WS messages.
+        const otpCallbacks = new Set();
+
+        const unsubMsg = onNewSystemMessage((event) => {
+            try {
+                const parsed = JSON.parse(event.data);
+                const wrapper = { data: parsed };
+                otpCallbacks.forEach((cb) => cb(wrapper));
+            } catch (_) {}
+        });
+
+        // Override send() – route through OTP WS when connected
+        const originalSend = originalApi.send.bind(originalApi);
+        originalApi.send = (data) => {
+            if (isNewLoggedIn() && window._newSystemWS?.readyState === WebSocket.OPEN) {
+                return sendViaNewSystemWithPromise(data);
+            }
+            return originalSend(data);
+        };
+
+        // Override onMessage() – merge legacy WS + OTP WS messages
+        const originalOnMessage = originalApi.onMessage.bind(originalApi);
+        originalApi.onMessage = () => ({
+            subscribe: (callback) => {
+                otpCallbacks.add(callback);
+                const origSub = originalOnMessage().subscribe(callback);
+                return {
+                    unsubscribe: () => {
+                        otpCallbacks.delete(callback);
+                        if (origSub?.unsubscribe) origSub.unsubscribe();
+                    },
+                };
+            },
+        });
+
+        this._newSystemProxyCleanup = () => {
+            unsubMsg();
+            otpCallbacks.clear();
+        };
+    }
 
     async authorizeAndSubscribe() {
         const token = V2GetActiveToken();

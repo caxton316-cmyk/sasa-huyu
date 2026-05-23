@@ -150,8 +150,17 @@ const AppContent = observer(() => {
         });
     };
 
+    const fallbackTimeoutRef = React.useRef(null);
+
     const changeActiveSymbolLoadingState = () => {
         init();
+
+        // Fallback: force loading to resolve after 15s even if active symbols hang
+        if (fallbackTimeoutRef.current) clearTimeout(fallbackTimeoutRef.current);
+        fallbackTimeoutRef.current = setTimeout(() => {
+            setIsLoading(false);
+        }, 15000);
+
         const retrieveActiveSymbols = () => {
             const { active_symbols } = ApiHelpers.instance;
             active_symbols.retrieveActiveSymbols(true).then(() => {

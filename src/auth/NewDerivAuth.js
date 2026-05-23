@@ -1,3 +1,117 @@
+/**
+ * Registry of message handlers for the new system (OTP) WebSocket.
+ * Handlers survive reconnection: when a new WS is created, all registered
+ * handlers are automatically attached to the new connection.
+ * @type {Set<(event: MessageEvent) => void>}
+ */
+const _newSystemHandlers = new Set()
+
+// ── Promise-based send (req_id matching) ─────────────────────────────────
+/** @type {Map<number, {resolve: Function, reject: Function}>} */
+const _pendingRequests = new Map()
+let _reqIdCounter = 1
+
+// Register internal handler to resolve pending Promises from OTP WS responses
+_newSystemHandlers.add((event) => {
+  try {
+    const data = JSON.parse(event.data)
+    if (data.req_id != null && _pendingRequests.has(data.req_id)) {
+      const entry = _pendingRequests.get(data.req_id)
+      if (data.error) {
+        entry.reject({ error: data.error, echo_req: data.echo_req || data })
+      } else {
+        entry.resolve(data)
+      }
+      _pendingRequests.delete(data.req_id)
+    }
+  } catch (_) {}
+})
+
+/**
+ * Register a handler for messages from the new system OTP WebSocket.
+ * The handler is automatically re-attached if the WS reconnects.
+ * @param {(event: MessageEvent) => void} handler
+ * @returns {() => void} unsubscribe function
+ */
+export function onNewSystemMessage(handler) {
+  _newSystemHandlers.add(handler)
+  return () => _newSystemHandlers.delete(handler)
+}
+
+/**
+ * Send a JSON message through the new system OTP WebSocket.
+ * @param {object} data - The data to send (will be JSON.stringify'd)
+ * @returns {boolean} true if the message was sent
+ */
+export function sendViaNewSystem(data) {
+  if (window._newSystemWS?.readyState === WebSocket.OPEN) {
+    window._newSystemWS.send(JSON.stringify(convertToNewFormat(data)))
+    return true
+  }
+  return false
+}
+
+/**
+ * Convert legacy Deriv API message format to new Options API format.
+ * Differences:
+ *   - `symbol` → `underlying_symbol` in proposal / buy.parameters
+ *   - `buy` integer must be string "1"
+ */
+function convertToNewFormat(data) {
+  if (!data || typeof data !== 'object') return data
+  const out = Array.isArray(data) ? data.map(convertToNewFormat) : { ...data }
+
+  // proposal: symbol → underlying_symbol
+  if (out.proposal === 1 && out.symbol) {
+    out.underlying_symbol = out.symbol
+    delete out.symbol
+  }
+
+  // buy: integer → string "1"
+  if ('buy' in out) {
+    out.buy = String(out.buy)
+  }
+
+  // buy.parameters: symbol → underlying_symbol
+  if (out.parameters && typeof out.parameters === 'object') {
+    out.parameters = { ...out.parameters }
+    if ('symbol' in out.parameters) {
+      out.parameters.underlying_symbol = out.parameters.symbol
+      delete out.parameters.symbol
+    }
+  }
+
+  return out
+}
+
+/**
+ * Send a message through the OTP WebSocket and return a Promise that resolves
+ * with the matching response (by req_id). Handles format conversion for the
+ * new Options API.
+ * @param {object} data
+ * @returns {Promise<object>}
+ */
+export function sendViaNewSystemWithPromise(data) {
+  return new Promise((resolve, reject) => {
+    const reqId = data.req_id || ++_reqIdCounter
+    data = { ...data, req_id: reqId }
+
+    const converted = convertToNewFormat(data)
+
+    _pendingRequests.set(reqId, { resolve, reject })
+
+    if (!sendViaNewSystem(converted)) {
+      _pendingRequests.delete(reqId)
+      reject({
+        error: {
+          code: 'DisconnectError',
+          message: 'New system WebSocket is not connected.',
+        },
+      })
+    }
+  })
+}
+
 const CONFIG = {
   clientId:    "337DJLKi2OJ4VsyFSLIt9",
   legacyAppId: "101585",
@@ -418,12 +532,20 @@ export async function createNewWebSocket() {
     }
   }
   
-  ws.onmessage = (msg) => {
+  // Dispatch messages to all registered handlers (survives reconnection)
+  ws.addEventListener('message', (event) => {
+    _newSystemHandlers.forEach(handler => {
+      try { handler(event) } catch(e) { console.warn("[NEW WS] Handler error:", e) }
+    })
+  })
+
+  // Keep minimal logging for debugging
+  ws.addEventListener('message', (event) => {
     try {
-      const data = JSON.parse(msg.data)
+      const data = JSON.parse(event.data)
       console.log("[NEW WS] Message received:", data.msg_type)
     } catch(e) {}
-  }
+  })
   
   ws.onerror = (e) => {
     console.error("[NEW WS] Error:", e)
@@ -433,6 +555,12 @@ export async function createNewWebSocket() {
   ws.onclose = () => {
     console.log("[NEW WS] Closed. Reconnecting in 3s...")
     window._newSystemWSReady = false
+
+    // Reject all pending requests so they don't hang forever
+    const err = { error: { code: 'DisconnectError', message: 'New system WS disconnected' } }
+    _pendingRequests.forEach((entry) => entry.reject(err))
+    _pendingRequests.clear()
+
     if (isNewLoggedIn()) {
       setTimeout(createNewWebSocket, 3000)
     }

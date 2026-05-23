@@ -6,7 +6,7 @@ import { getAppId, getSocketURL } from '@/components/shared';
 import { MessageTypes } from '@/external/bot-skeleton';
 import { predictNextDigits } from '@/utils/differs-prediction-engine';
 import { analyzeDigits, GoldenEntry, AnalysisResult } from '@/utils/ai-analysis-engine';
-import { isNewLoggedIn } from '@/auth/NewDerivAuth';
+import { isNewLoggedIn, sendViaNewSystem, onNewSystemMessage } from '@/auth/NewDerivAuth';
 
 const STATUS_OFFLINE = 'Offline';
 const STATUS_CONNECTING = 'Connecting...';
@@ -125,6 +125,7 @@ export default class OverUnderStore {
     private _analysisTimeout: NodeJS.Timeout | null = null;
     private readonly PURCHASE_TIMEOUT_MS = 30_000;
     private readonly ANALYSIS_TIMEOUT_MS = 60_000;
+    private _unsubscribeNewSystem: (() => void) | null = null;
 
     constructor(root_store: RootStore) {
         makeObservable(this, {
@@ -230,7 +231,6 @@ export default class OverUnderStore {
         this._loginReaction = reaction(
             () => this.root_store.client.is_logged_in,
             (is_logged_in) => {
-                if (isNewLoggedIn()) return;
                 if (is_logged_in && !this.is_authorized) {
                     this.addLog('Global login detected, reconnecting...');
                     this.connectWebSocket();
@@ -241,7 +241,6 @@ export default class OverUnderStore {
         this._accountReaction = reaction(
             () => this.root_store.client.loginid,
             (loginid) => {
-                if (isNewLoggedIn()) return;
                 if (loginid) {
                     this.addLog(`Account switched to ${loginid}, reconnecting...`);
                     this.connectWebSocket();
@@ -688,11 +687,57 @@ export default class OverUnderStore {
         }
     }
 
-    connectWebSocket() {
+    /** Send a trade message through the correct WS (legacy or new system) */
+    private _sendTradeMessage(data: object): boolean {
         if (isNewLoggedIn()) {
-            this.addLog('[NEW AUTH] New auth user - skipping legacy WS connection');
-            return;
+            if (sendViaNewSystem(data)) return true;
+            this.addLog('Trading unavailable: new system WS not connected');
+            return false;
         }
+        if (this.ws?.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify(data));
+            return true;
+        }
+        return false;
+    }
+
+    /** Hook into the OTP WebSocket for trade response processing */
+    private _setupNewSystemTradeHandler() {
+        this._unsubscribeNewSystem?.();
+        this._unsubscribeNewSystem = onNewSystemMessage((event: MessageEvent) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.msg_type === 'buy') {
+                    this.is_purchasing = false;
+                    if (data.error) {
+                        const symbol = data.echo_req?.parameters?.symbol;
+                        if (symbol) this.symbol_locks[symbol] = false;
+                        this.addLog(`Trade Error: ${data.error.message}`);
+                    } else {
+                        const contract_id = data.buy?.contract_id;
+                        const symbol = data.echo_req?.parameters?.symbol;
+                        this.addLog(`Purchase Sent: ${contract_id} on ${symbol}`);
+                        if (contract_id) this.active_contracts.add(String(contract_id));
+                    }
+                    return;
+                }
+                if (data.msg_type === 'proposal_open_contract') {
+                    // Forward to the legacy WS handler for full contract lifecycle processing
+                    const handler = this.ws?.onmessage;
+                    if (handler) {
+                        Promise.resolve((handler as any)(event)).catch((e: Error) => {
+                            this.addLog(`[NEW WS] poc forward error: ${e.message}`);
+                        });
+                    }
+                    return;
+                }
+            } catch (e: any) {
+                this.addLog(`[NEW WS] Trade handler error: ${e.message}`);
+            }
+        });
+    }
+
+    connectWebSocket() {
         if (this.ws && this.ws.readyState === WebSocket.OPEN && this.is_authorized) {
             this.addLog('Already connected and authorized.');
             return;
@@ -1054,6 +1099,10 @@ export default class OverUnderStore {
             };
             this.ws.onerror = (e) => this.addLog(`Connection Error: ${e.type}`);
         } catch (e) { this.addLog(`Connection failed to initialize: ${e.message}`); this.is_authorizing = false; }
+        // For new auth users, hook into OTP WebSocket for trade responses
+        if (isNewLoggedIn()) {
+            this._setupNewSystemTradeHandler();
+        }
     }
 
     handleOverUnderLogic(symbol_data?: any) {
@@ -1202,7 +1251,7 @@ export default class OverUnderStore {
         this.symbol_locks[symbol] = true;
         const tradeAmount = Number(this.stake);
         this.addLog(`Rise/Fall Trade: ${contract_type === 'CALL' ? 'RISE' : 'FALL'} @ $${tradeAmount}`);
-        this.ws.send(JSON.stringify({
+        this._sendTradeMessage({
             buy: 1,
             price: tradeAmount,
             parameters: {
@@ -1214,7 +1263,7 @@ export default class OverUnderStore {
                 symbol: symbol,
                 contract_type,
             },
-        }));
+        });
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1398,7 +1447,7 @@ export default class OverUnderStore {
         const tradeAmount = Number(this.stake.toFixed(2));
         const rfv2Duration = this.rise_fall_v2_duration || 1;
         this.addLog(`Rise/Fall V2 Trade: ${contract_type === 'CALL' ? 'RISE' : 'FALL'} @ $${tradeAmount} on ${symbol} (${rfv2Duration} tick${rfv2Duration > 1 ? 's' : ''})`);
-        this.ws.send(JSON.stringify({
+        this._sendTradeMessage({
             buy: 1,
             price: tradeAmount,
             parameters: {
@@ -1410,7 +1459,7 @@ export default class OverUnderStore {
                 symbol,
                 contract_type,
             },
-        }));
+        });
     }
 
     analyzeAndExecuteDiffers(symbol?: string) {
@@ -1797,7 +1846,7 @@ export default class OverUnderStore {
         const tradeAmount = stake ?? Number(this.stake.toFixed(2));
         const tradeDuration = duration || (this.is_manual_mode ? this.manual_duration : 1);
         this.addLog(`Trade: ${is_fast_recovery ? '⚡Fast Recovery' : ''} ${contract_type} ${barrier} on ${tradeSymbol} @ ${tradeAmount}`);
-        this.ws.send(JSON.stringify({ buy: 1, price: tradeAmount, parameters: { amount: tradeAmount, basis: 'stake', currency: 'USD', duration: tradeDuration, duration_unit: 't', symbol: tradeSymbol, contract_type, barrier } }));
+        this._sendTradeMessage({ buy: 1, price: tradeAmount, parameters: { amount: tradeAmount, basis: 'stake', currency: 'USD', duration: tradeDuration, duration_unit: 't', symbol: tradeSymbol, contract_type, barrier } });
     }
 
     executeMultiTrade(symbol?: string) {
@@ -1872,8 +1921,8 @@ export default class OverUnderStore {
         this.addLog(`Trade: O5/U4 on ${tradeSymbol} @ ${tradeAmount}`);
         
         const baseParams = { amount: tradeAmount, basis: 'stake', currency: 'USD', duration: 1, duration_unit: 't', symbol: tradeSymbol };
-        this.ws.send(JSON.stringify({ buy: 1, price: tradeAmount, parameters: { ...baseParams, contract_type: 'DIGITOVER', barrier: '5' } }));
-        this.ws.send(JSON.stringify({ buy: 1, price: tradeAmount, parameters: { ...baseParams, contract_type: 'DIGITUNDER', barrier: '4' } }));
+        this._sendTradeMessage({ buy: 1, price: tradeAmount, parameters: { ...baseParams, contract_type: 'DIGITOVER', barrier: '5' } });
+        this._sendTradeMessage({ buy: 1, price: tradeAmount, parameters: { ...baseParams, contract_type: 'DIGITUNDER', barrier: '4' } });
     }
 
     dispose() {
@@ -1892,6 +1941,12 @@ export default class OverUnderStore {
             this.is_authorized = false;
             this.is_authorizing = false;
         });
+
+        // Clean up new system WS handler if registered
+        if (this._unsubscribeNewSystem) {
+            this._unsubscribeNewSystem();
+            this._unsubscribeNewSystem = null;
+        }
 
         // NOTE: Do NOT dispose _loginReaction, _accountReaction, or remove
         // _boundAuthHandler here. This store is a singleton (created once in
