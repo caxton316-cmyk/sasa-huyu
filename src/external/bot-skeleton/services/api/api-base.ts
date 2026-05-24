@@ -373,8 +373,16 @@ class APIBase {
                     // be forgotten on that same socket. Sending `forget_all: 'ticks'` through the
                     // new-auth WebSocket leaves the legacy subscription alive, which causes the
                     // Bot Builder rerun error: "already subscribed to <symbol>".
-                    if (firstKey === 'forget_all' && ['ticks', 'candles'].includes(data.forget_all)) {
-                        return originalSend(data);
+                    // NOTE: deriv-api's forgetAll() sends { forget_all: ['ticks'] } (ARRAY),
+                    // while direct api.send({ forget_all: 'ticks' }) sends a STRING.
+                    // Handle both formats.
+                    if (firstKey === 'forget_all') {
+                        const forgetTypes = Array.isArray(data.forget_all)
+                            ? data.forget_all
+                            : [data.forget_all];
+                        if (forgetTypes.some(t => t === 'ticks' || t === 'candles')) {
+                            return originalSend(data);
+                        }
                     }
 
                     if (TRADE_MSG_TYPES.has(firstKey)) {
