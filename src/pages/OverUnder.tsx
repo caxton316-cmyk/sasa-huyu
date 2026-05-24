@@ -161,6 +161,7 @@ const OverUnder = observer(() => {
         is_turbo, selected_symbol, debug_info, is_analyzing_volatility, is_authorizing,
         differs_predicted_top4, is_digit_occurrence_filter_active, is_rebounce_active,
         is_trigger_enabled,
+        session_trades, session_wins, session_losses, session_profit,
         setStake, setMartingale, setIsVolatilityChanger,
         setIsDiffersMode, setIsDiffersV2Mode, setIsTatuBoraMode, setIsNneKwishaMode, setIsAllVolMode, setIs2termMode, setIsRiseFallMode, setIsRiseFallV2Mode, setIsAutomate,
         setUseSecondTrigger, setIsManualMode, setManualContractType, setManualBarrier, setManualDuration, setRiseFallV2Duration,
@@ -173,6 +174,7 @@ const OverUnder = observer(() => {
 
     const [showGuide, setShowGuide] = useState(false);
     const [showRecovery, setShowRecovery] = useState(false);
+    const [showResults, setShowResults] = useState(true);
 
     const activeStrategy: Strategy = is_differs_mode ? 'differs'
         : is_differs_v2_mode ? 'differs_v2'
@@ -734,6 +736,65 @@ const OverUnder = observer(() => {
                             {is_auto_running && <span className='ou-cta__pulse' />}
                         </motion.button>
                     </div>
+                </div>
+
+                {/* ══ TRADE RESULTS PANEL ══ */}
+                <div className='ou-results-panel'>
+                    <button
+                        className='ou-results-panel__toggle'
+                        onClick={() => setShowResults(v => !v)}
+                        type='button'
+                    >
+                        <span className='ou-results-panel__toggle-left'>
+                            <BarChart2 size={13} />
+                            <span>Trade Results</span>
+                            {session_trades > 0 && (
+                                <span className='ou-results-panel__badge'>{session_trades}</span>
+                            )}
+                        </span>
+                        {showResults ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
+                    <AnimatePresence initial={false}>
+                        {showResults && (
+                            <motion.div
+                                className='ou-results-panel__body'
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                                style={{ overflow: 'hidden' }}
+                            >
+                                <div className='ou-results-panel__stats'>
+                                    <div className='ou-results-stat ou-results-stat--trades'>
+                                        <span className='ou-results-stat__val'>{session_trades}</span>
+                                        <span className='ou-results-stat__lbl'>Trades</span>
+                                    </div>
+                                    <div className='ou-results-stat ou-results-stat--win'>
+                                        <span className='ou-results-stat__val'>{session_wins}</span>
+                                        <span className='ou-results-stat__lbl'>Wins</span>
+                                    </div>
+                                    <div className='ou-results-stat ou-results-stat--loss'>
+                                        <span className='ou-results-stat__val'>{session_losses}</span>
+                                        <span className='ou-results-stat__lbl'>Losses</span>
+                                    </div>
+                                    <div className={`ou-results-stat ${session_profit >= 0 ? 'ou-results-stat--profit' : 'ou-results-stat--loss'}`}>
+                                        <span className='ou-results-stat__val'>
+                                            {session_profit >= 0 ? '+' : ''}{session_profit.toFixed(2)}
+                                        </span>
+                                        <span className='ou-results-stat__lbl'>Profit</span>
+                                    </div>
+                                    {session_trades > 0 && (
+                                        <div className='ou-results-stat ou-results-stat--winrate'>
+                                            <span className='ou-results-stat__val'>
+                                                {Math.round((session_wins / session_trades) * 100)}%
+                                            </span>
+                                            <span className='ou-results-stat__lbl'>Win Rate</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
 
                 {/* ══ MONITOR PANEL ══ */}

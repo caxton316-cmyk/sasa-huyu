@@ -658,6 +658,56 @@ $cyan:    #06b6d4;
 
 .ou-spin { animation: spin .9s linear infinite; }
 
+// ── Trade Results Panel ──────────────────────────────────────
+.ou-results-panel {
+    background: $bg1; border: 1px solid $b1; border-radius: 14px;
+    overflow: hidden; margin-bottom: 0;
+    box-shadow: 0 4px 16px rgba(0,0,0,.22);
+
+    &__toggle {
+        display: flex; align-items: center; justify-content: space-between;
+        width: 100%; padding: 11px 14px;
+        background: transparent; border: none; cursor: pointer;
+        color: $sub; font-size: 12px; font-weight: 700; letter-spacing: .6px;
+        text-transform: uppercase; gap: 8px;
+        transition: background .15s;
+        &:hover { background: rgba(255,255,255,.04); }
+    }
+
+    &__toggle-left {
+        display: flex; align-items: center; gap: 7px;
+    }
+
+    &__badge {
+        display: inline-flex; align-items: center; justify-content: center;
+        background: rgba(59,130,246,.25); color: $blue;
+        border-radius: 20px; padding: 1px 7px; font-size: 11px; font-weight: 700;
+    }
+
+    &__body { padding: 0 14px 14px; }
+
+    &__stats {
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+        gap: 8px; padding-top: 4px;
+    }
+}
+
+.ou-results-stat {
+    background: rgba(255,255,255,.04); border: 1px solid $b0;
+    border-radius: 10px; padding: 10px 8px;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+
+    &__val { font-size: 18px; font-weight: 800; color: $txt; line-height: 1; }
+    &__lbl { font-size: 10px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; color: $dim; }
+
+    &--win  { border-color: rgba($green, .35); background: rgba($green, .08); .ou-results-stat__val { color: $green; } }
+    &--loss { border-color: rgba($red,   .35); background: rgba($red,   .08); .ou-results-stat__val { color: $red;   } }
+    &--profit.ou-results-stat--loss { border-color: rgba($red, .35); background: rgba($red, .08); .ou-results-stat__val { color: $red; } }
+    &--profit { border-color: rgba($green, .35); background: rgba($green, .08); .ou-results-stat__val { color: $green; } }
+    &--winrate { border-color: rgba($cyan, .35); background: rgba($cyan, .08); .ou-results-stat__val { color: $cyan; } }
+    &--trades { border-color: rgba($blue, .35); background: rgba($blue, .08); .ou-results-stat__val { color: $blue; } }
+}
+
 // ── Monitor ──────────────────────────────────────────────────
 .ou-monitor {
     background: $bg1; border: 1px solid $b1; border-radius: 14px;

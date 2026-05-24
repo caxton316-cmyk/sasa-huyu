@@ -80,6 +80,10 @@ export default class OverUnderStore {
     is_rise_fall_v2_mode = false;
     rise_fall_v2_duration = 1;
     last_profit = 0;
+    session_trades = 0;
+    session_wins = 0;
+    session_losses = 0;
+    session_profit = 0;
     differs_predicted_top4: number[] = [];
     differs_v2_predicted_digit: number | null = null;
     differs_v2_post_trade_ticks = 0;
@@ -611,6 +615,10 @@ export default class OverUnderStore {
             this.differs_v2_predicted_digit = null;
             this.differs_v2_post_trade_ticks = 0;
             this.rise_fall_trade_count = 0;
+            this.session_trades = 0;
+            this.session_wins = 0;
+            this.session_losses = 0;
+            this.session_profit = 0;
         }
         this.is_purchasing = false;
         this.pending_instant_result_check = {};
@@ -819,7 +827,15 @@ export default class OverUnderStore {
                 // Connect for public ticks only — trades go through the OTP WebSocket.
                 if (isNewLoggedIn()) {
                     runInAction(() => { this.is_authorizing = false; });
-                    this.subscribeToTicks(this.selected_symbol);
+                    // 500 ms head-start: gives the Deriv server time to fully close
+                    // the previous connection's tick subscriptions before the new
+                    // connection subscribes to the same symbol — eliminating the
+                    // "SubscriptionAlreadyExists" (already subscribed to 1HZxxV) error.
+                    setTimeout(() => {
+                        if (this.ws?.readyState === WebSocket.OPEN) {
+                            this.subscribeToTicks(this.selected_symbol);
+                        }
+                    }, 500);
                     return;
                 }
 
@@ -1025,6 +1041,9 @@ export default class OverUnderStore {
                                 if (this.active_contracts.has(contract_id)) {
                                     const profit = contract.profit;
                                     this.contract_results.set(contract_id, { profit, symbol });
+                                    this.session_trades++;
+                                    if (profit >= 0) { this.session_wins++; } else { this.session_losses++; }
+                                    this.session_profit = Number((this.session_profit + profit).toFixed(2));
                                     this.addLog(`Trade Result [${contract_id}] on ${symbol}: ${profit >= 0 ? 'WON' : 'LOST'} ($${profit})`);
                                     this.active_contracts.delete(contract_id);
                                     if (this.active_contracts.size === 0 && !this.is_processing_round) {

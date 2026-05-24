@@ -28,7 +28,7 @@
 
 .blocklyTreeRow {
     &.blocklyTreeSelected {
-        background-color: #6c5ce7 !important; // Purple color to match header
+        background-color: #7c3aed !important;
     }
 }
 
@@ -37,27 +37,24 @@
     fill-opacity: 0.9;
 }
 
-// Override Blockly block colors — rich deep violet for a premium look
-.blocklyPath {
-    fill: #3d2b9e !important;
-    stroke: #7c6cf0 !important;
+// Only recolour the root/entry block headers (numbered sections like
+// "1. Trade parameters").  Regular inner blocks keep their original colours.
+// The :has() selector targets only blocklyDraggable groups that contain
+// a root-block header text element.
+.blocklyDraggable:has(.blocklyTextRootBlockHeader) > .blocklyPath {
+    fill: #7c3aed !important;
+    stroke: #9d65f5 !important;
 }
 
-.blocklyPathLight {
-    stroke: #8b7ef5 !important;
+.blocklyDraggable:has(.blocklyTextRootBlockHeaderCollapsed) > .blocklyPath {
+    fill: #7c3aed !important;
+    stroke: #9d65f5 !important;
 }
 
-.blocklyPathDark {
-    stroke: #2a1d7a !important;
-}
-
-.blocklyEditableText > rect,
-.blocklyDropdownRect {
-    fill: #5448c8 !important;
-}
-
-.blocklySelected > .blocklyPath {
-    stroke: #a78bfa !important;
+// Keep the selected highlight consistent
+.blocklySelected:has(.blocklyTextRootBlockHeader) > .blocklyPath,
+.blocklySelected:has(.blocklyTextRootBlockHeaderCollapsed) > .blocklyPath {
+    stroke: #c4b5fd !important;
     stroke-width: 3px !important;
 }
 

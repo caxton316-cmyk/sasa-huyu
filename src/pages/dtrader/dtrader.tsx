@@ -6,6 +6,17 @@ import { V2GetActiveToken, V2GetActiveClientId } from '@/external/bot-skeleton/s
 import { redirectToLogin } from '@/components/shared/utils/login/login';
 import { LocalStore } from '@/components/shared/utils/storage/storage';
 
+const getEffectiveToken = () =>
+    V2GetActiveToken() ||
+    sessionStorage.getItem('NEW_AUTH_token') ||
+    localStorage.getItem('NEW_AUTH_token') ||
+    null;
+
+const getEffectiveLoginId = () =>
+    V2GetActiveClientId() ||
+    localStorage.getItem('active_loginid') ||
+    null;
+
 const Dtrader = observer(() => {
     const [iframeSrc, setIframeSrc] = useState<string>('');
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -66,12 +77,12 @@ const Dtrader = observer(() => {
     }, []);
 
     useEffect(() => {
-        const token = V2GetActiveToken();
-        const activeLoginId = V2GetActiveClientId();
+        const token = getEffectiveToken();
+        const activeLoginId = getEffectiveLoginId();
 
-        if (token && activeLoginId) {
+        if (activeLoginId) {
             setIsAuthenticated(true);
-            buildIframeUrl(token, activeLoginId);
+            buildIframeUrl(token || activeLoginId, activeLoginId);
         } else {
             setIsAuthenticated(false);
             setIframeSrc('');
@@ -80,14 +91,14 @@ const Dtrader = observer(() => {
 
     useEffect(() => {
         const checkAuthAndUpdate = () => {
-            const token = V2GetActiveToken();
-            const activeLoginId = V2GetActiveClientId();
+            const token = getEffectiveToken();
+            const activeLoginId = getEffectiveLoginId();
 
-            if (token && activeLoginId) {
+            if (activeLoginId) {
                 if (!isAuthenticated) {
                     setIsAuthenticated(true);
                 }
-                buildIframeUrl(token, activeLoginId);
+                buildIframeUrl(token || activeLoginId, activeLoginId);
             } else if (isAuthenticated) {
                 setIsAuthenticated(false);
                 setIframeSrc('');
@@ -95,13 +106,19 @@ const Dtrader = observer(() => {
         };
 
         const handleStorageChange = (e: StorageEvent) => {
-            if (e.key === 'authToken' || e.key === 'active_loginid' || e.key === 'clientAccounts' || e.key === 'accountsList' || e.key === 'show_as_cr') {
+            if (
+                e.key === 'authToken' ||
+                e.key === 'active_loginid' ||
+                e.key === 'clientAccounts' ||
+                e.key === 'accountsList' ||
+                e.key === 'show_as_cr' ||
+                e.key === 'NEW_AUTH_token'
+            ) {
                 checkAuthAndUpdate();
             }
         };
 
         window.addEventListener('storage', handleStorageChange);
-
         const interval = setInterval(checkAuthAndUpdate, 2000);
 
         return () => {

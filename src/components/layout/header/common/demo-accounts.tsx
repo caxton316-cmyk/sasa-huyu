@@ -5,6 +5,7 @@ import { AccountSwitcher as UIAccountSwitcher } from '@deriv-com/ui';
 import AccountSwitcherFooter from './account-swticher-footer';
 import { TDemoAccounts } from './types';
 import { AccountSwitcherDivider, convertCommaValue } from './utils';
+import { isNewLoggedIn, sendViaNewSystemWithPromise } from '@/auth/NewDerivAuth';
 
 const DemoAccounts = ({
     tabs_labels,
@@ -16,18 +17,26 @@ const DemoAccounts = ({
     is_logging_out,
 }: TDemoAccounts) => {
     const handleResetBalance = async (loginId: string) => {
-        if (!api_base?.api) return;
-
         try {
             console.log('🔄 [RESET BALANCE] Resetting demo balance for:', loginId);
+
+            if (isNewLoggedIn()) {
+                const response = await sendViaNewSystemWithPromise({ topup_virtual: 1 });
+                if (response?.error) {
+                    console.error('❌ [RESET BALANCE] Error resetting balance (new auth):', response.error);
+                    return;
+                }
+                console.log('✅ [RESET BALANCE] Balance reset successful (new auth).');
+                return;
+            }
+
+            if (!api_base?.api) return;
             const { topup_virtual, error } = await api_base.api.send({ topup_virtual: 1 });
             if (error) {
                 console.error('❌ [RESET BALANCE] Error resetting balance:', error);
                 return;
             }
-
             console.log('✅ [RESET BALANCE] Balance reset successful, waiting for balance update...');
-            // No reload needed, balance is updated via subscription.
         } catch (error) {
             console.error('❌ [RESET BALANCE] Error resetting balance:', error);
         }
