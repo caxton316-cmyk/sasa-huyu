@@ -4,9 +4,12 @@ import Text from '@/components/shared_ui/text';
 import { localize } from '@deriv-com/translations';
 import {
     generateDerivApiInstance,
+    getMainAppActiveLoginId,
+    getMainAppActiveToken,
     V2GetActiveClientId,
     V2GetActiveToken,
 } from '@/external/bot-skeleton/services/api/appId';
+import { isNewLoggedIn, onNewSystemMessage, sendViaNewSystemWithPromise } from '@/auth/NewDerivAuth';
 import { contract_stages } from '@/constants/contract-stage';
 import { useStore } from '@/hooks/useStore';
 import { isSpecialCRAccount } from '@/utils/special-accounts-config';
@@ -54,6 +57,7 @@ const SpeedBot = observer(() => {
     const apiRef = useRef<any>(null);
     const tickStreamIdRef = useRef<string | null>(null);
     const messageHandlerRef = useRef<((evt: MessageEvent) => void) | null>(null);
+    const newSystemUnsubscribeRef = useRef<(() => void) | null>(null);
 
     const lastOutcomeWasLossRef = useRef(false);
 
@@ -77,7 +81,7 @@ const SpeedBot = observer(() => {
     // Live digits state
     const [digits, setDigits] = useState<number[]>([]);
     const [lastDigit, setLastDigit] = useState<number | null>(null);
-    const [ticksProcessed, setTicksProcessed] = useState<number>(0);
+    const [, setTicksProcessed] = useState<number>(0);
 
     const [status, setStatus] = useState<string>('');
     // UI toggles and counters
@@ -152,25 +156,55 @@ const SpeedBot = observer(() => {
 
     const authorizeIfNeeded = async () => {
         if (is_authorized) return;
-        const token = V2GetActiveToken();
-        if (!token) {
+
+        const loginid = getMainAppActiveLoginId();
+        const token = getMainAppActiveToken();
+        if (!loginid && !token) {
+            setStatus('No authorization found. Please log in and select an account.');
+            throw new Error('No authorization found');
+        }
+
+        if (isNewLoggedIn() && (window as any)._newSystemWS?.readyState === WebSocket.OPEN) {
+            let currency = 'USD';
+            try {
+                const clientAccounts = JSON.parse(localStorage.getItem('clientAccounts') || '{}');
+                currency = clientAccounts?.[loginid || '']?.currency || currency;
+            } catch {
+                // Ignore malformed stored account metadata and fall back to the default currency.
+            }
+            setIsAuthorized(true);
+            setAccountCurrency(currency);
+            try {
+                store?.client?.setLoginId?.(loginid || '');
+                store?.client?.setCurrency?.(currency);
+                store?.client?.setIsLoggedIn?.(true);
+            } catch {
+                // Ignore shared-store sync failures; trading authorization has already succeeded.
+            }
+            return;
+        }
+
+        const legacyToken = V2GetActiveToken() || token;
+        if (!legacyToken) {
             setStatus('No token found. Please log in and select an account.');
             throw new Error('No token');
         }
-        const { authorize, error } = await apiRef.current.authorize(token);
+        const { authorize, error } = await apiRef.current.authorize(legacyToken);
         if (error) {
             setStatus(`Authorization error: ${error.message || error.code}`);
             throw error;
         }
         setIsAuthorized(true);
-        const loginid = authorize?.loginid || V2GetActiveClientId();
+        const authorizedLoginId = authorize?.loginid || V2GetActiveClientId() || loginid;
         setAccountCurrency(authorize?.currency || 'USD');
         try {
             // Sync SpeedBot auth state into shared ClientStore so Transactions store keys correctly by account
-            store?.client?.setLoginId?.(loginid || '');
+            store?.client?.setLoginId?.(authorizedLoginId || '');
             store?.client?.setCurrency?.(authorize?.currency || 'USD');
             store?.client?.setIsLoggedIn?.(true);
-        } catch {}
+        } catch {
+            // Ignore shared-store sync failures; trading authorization has already succeeded.
+        }
     };
 
     const stopTicks = () => {
@@ -183,7 +217,13 @@ const SpeedBot = observer(() => {
                 apiRef.current?.connection?.removeEventListener('message', messageHandlerRef.current);
                 messageHandlerRef.current = null;
             }
-        } catch {}
+            if (newSystemUnsubscribeRef.current) {
+                newSystemUnsubscribeRef.current();
+                newSystemUnsubscribeRef.current = null;
+            }
+        } catch {
+            // Cleanup should never block unmounting or symbol changes.
+        }
     };
 
     const startTicks = async (sym: string) => {
@@ -209,7 +249,9 @@ const SpeedBot = observer(() => {
                     if (data?.forget?.id && data?.forget?.id === tickStreamIdRef.current) {
                         // stopped
                     }
-                } catch {}
+                } catch {
+                    // Ignore optional shared-store sync failures for embedded account state.
+                }
             };
             messageHandlerRef.current = onMsg;
             apiRef.current?.connection?.addEventListener('message', onMsg);
@@ -224,7 +266,7 @@ const SpeedBot = observer(() => {
         // IMPORTANT: Only apply special CR logic if account is actually in the special CR list
         // For normal accounts, use standard authorization flow without any interference
         const showAsCR = typeof window !== 'undefined' ? localStorage.getItem('show_as_cr') : null;
-        const currentLoginId = V2GetActiveClientId();
+        const currentLoginId = getMainAppActiveLoginId();
         
         // Strict check: only true if account is actually in the special CR accounts list
         const isSpecialCR = (showAsCR && isSpecialCRAccount(showAsCR)) || (currentLoginId && isSpecialCRAccount(currentLoginId));
@@ -235,7 +277,7 @@ const SpeedBot = observer(() => {
             isSpecialCR
         });
         
-        if (isSpecialCR) {
+        if (isSpecialCR && !isNewLoggedIn()) {
             // ONLY for special CR accounts - re-authorize with demo account token before each purchase
             // This ensures the API uses demo account balance, preventing "insufficient funds" errors
             const demoToken = V2GetActiveToken(); // This already returns demo token for special CR accounts
@@ -280,7 +322,10 @@ const SpeedBot = observer(() => {
         }
 
         const buy_req = tradeOptionToBuy(tradeType === 'OVER_UNDER' ? (lastOutcomeWasLossRef.current ? 'DIGITUNDER' : 'DIGITOVER') : tradeType, trade_option);
-        const { buy, error } = await apiRef.current.buy(buy_req);
+        const buyResponse = isNewLoggedIn()
+            ? await sendViaNewSystemWithPromise(buy_req)
+            : await apiRef.current.buy(buy_req);
+        const { buy, error } = buyResponse || {};
         if (error) throw error;
         setStatus(`Purchased: ${buy?.longcode || 'Contract'} (ID: ${buy?.contract_id})`);
         return buy;
@@ -330,7 +375,9 @@ const SpeedBot = observer(() => {
                         date_start: Math.floor(Date.now() / 1000),
                         status: 'open',
                     } as any);
-                } catch {}
+                } catch {
+                    // The transaction row is a best-effort UI enhancement.
+                }
 
                 // Reflect stage immediately after successful buy
                 run_panel.setHasOpenContract(true);
@@ -338,11 +385,14 @@ const SpeedBot = observer(() => {
 
                 // subscribe to contract updates for this purchase and push to transactions
                 try {
-                    const res = await apiRef.current.send({
+                    const pocRequest = {
                         proposal_open_contract: 1,
                         contract_id: buy?.contract_id,
                         subscribe: 1,
-                    });
+                    };
+                    const res = isNewLoggedIn()
+                        ? await sendViaNewSystemWithPromise(pocRequest)
+                        : await apiRef.current.send(pocRequest);
                     const { error, proposal_open_contract: pocInit, subscription } = res || {};
                     if (error) throw error;
 
@@ -377,10 +427,14 @@ const SpeedBot = observer(() => {
                                             lossStreak = 0;
                                             step = 0;
                                             setStake(baseStake.toString());
+                                            setConsecWins(prev => prev + 1);
+                                            setConsecLosses(0);
                                         } else {
                                             lastOutcomeWasLossRef.current = true;
                                             lossStreak++;
                                             step = Math.min(step + 1, 50);
+                                            setConsecLosses(prev => prev + 1);
+                                            setConsecWins(0);
                                         }
                                     }
                                 }
@@ -389,7 +443,12 @@ const SpeedBot = observer(() => {
                             // noop
                         }
                     };
-                    apiRef.current?.connection?.addEventListener('message', onMsg);
+                    if (isNewLoggedIn()) {
+                        newSystemUnsubscribeRef.current?.();
+                        newSystemUnsubscribeRef.current = onNewSystemMessage(onMsg);
+                    } else {
+                        apiRef.current?.connection?.addEventListener('message', onMsg);
+                    }
                 } catch (subErr) {
                     // eslint-disable-next-line no-console
                     console.error('subscribe poc error', subErr);

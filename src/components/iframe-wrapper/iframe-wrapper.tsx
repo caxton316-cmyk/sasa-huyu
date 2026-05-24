@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import './iframe-wrapper.scss';
-import { V2GetActiveToken, V2GetActiveClientId } from '@/external/bot-skeleton/services/api/appId';
+import { getMainAppActiveToken, getMainAppActiveLoginId } from '@/external/bot-skeleton/services/api/appId';
 import { getAppId } from '@/components/shared/utils/config/config';
 import { useStore } from '@/hooks/useStore';
 import { contract_stages } from '@/constants/contract-stage';
@@ -39,8 +39,8 @@ const IframeWrapper: React.FC<IframeWrapperProps> = observer(({ src, title, clas
 
         // Function to send auth data to iframe
         const sendAuthData = () => {
-            const token = V2GetActiveToken();
-            const loginid = V2GetActiveClientId();
+            const token = getMainAppActiveToken();
+            const loginid = getMainAppActiveLoginId();
             const appId = getAppId(); // Get the current app ID
 
             if (token && loginid && iframe.contentWindow) {
@@ -257,12 +257,12 @@ const IframeWrapper: React.FC<IframeWrapperProps> = observer(({ src, title, clas
         };
 
         // Monitor localStorage for auth token changes (login/logout)
-        let lastToken = V2GetActiveToken();
-        let lastLoginId = V2GetActiveClientId();
+        let lastToken = getMainAppActiveToken();
+        let lastLoginId = getMainAppActiveLoginId();
 
         const checkAuthChanges = () => {
-            const currentToken = V2GetActiveToken();
-            const currentLoginId = V2GetActiveClientId();
+            const currentToken = getMainAppActiveToken();
+            const currentLoginId = getMainAppActiveLoginId();
 
             // If token changed (login or logout), send immediately
             if (currentToken !== lastToken || currentLoginId !== lastLoginId) {

@@ -161,13 +161,17 @@ export default class TicksService {
     }
 
     unsubscribeAllAndSubscribeListeners(symbol) {
+        const tickSubscription = this.subscriptions.getIn(['tick', symbol]);
         const ohlcSubscriptions = this.subscriptions.getIn(['ohlc', symbol]);
 
-        const subscription = [...(ohlcSubscriptions ? Array.from(ohlcSubscriptions.values()) : [])];
+        const subscriptions = [
+            ...(tickSubscription ? [tickSubscription] : []),
+            ...(ohlcSubscriptions ? Array.from(ohlcSubscriptions.values()) : []),
+        ];
 
-        Promise.all(subscription.map(id => doUntilDone(() => api_base.api.forget(id))));
+        Promise.all(subscriptions.map(id => doUntilDone(() => api_base.api.forget(id))));
 
-        this.subscriptions = new Map();
+        this.subscriptions = this.subscriptions.deleteIn(['tick', symbol]).deleteIn(['ohlc', symbol]);
     }
 
     updateTicksAndCallListeners(symbol, ticks) {
@@ -326,12 +330,20 @@ export default class TicksService {
                 .then(() => {
                     this.forgetCandleSubscription()
                         .then(() => {
+                            this.ticks = new Map();
+                            this.candles = new Map();
+                            this.tickListeners = new Map();
+                            this.ohlcListeners = new Map();
+                            this.subscriptions = new Map();
+                            this.ticks_history_promise = null;
+                            this.candles_promise = null;
                             resolve();
                         })
                         .catch(reject);
                 })
                 .catch(reject);
             this.ticks_history_promise = null;
+            this.candles_promise = null;
         });
     }
 }

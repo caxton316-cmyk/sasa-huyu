@@ -123,6 +123,50 @@ export const V2GetActiveClientId = () => {
     return null;
 };
 
+
+export const getMainAppActiveToken = () => {
+    if (typeof window === 'undefined') return null;
+
+    const newAuthToken = sessionStorage.getItem('NEW_AUTH_token') || localStorage.getItem('NEW_AUTH_token');
+    if (newAuthToken && newAuthToken !== 'null') return newAuthToken;
+
+    const legacyToken = V2GetActiveToken();
+    if (legacyToken && legacyToken !== 'null') return legacyToken;
+
+    const authToken = localStorage.getItem('authToken');
+    if (authToken && authToken !== 'null') return authToken;
+
+    return null;
+};
+
+export const getMainAppActiveLoginId = () => {
+    if (typeof window === 'undefined') return null;
+
+    const activeLoginId = localStorage.getItem('active_loginid');
+    if (activeLoginId && activeLoginId !== 'null') return activeLoginId;
+
+    const v2LoginId = V2GetActiveClientId();
+    if (v2LoginId && v2LoginId !== 'null') return v2LoginId;
+
+    try {
+        const clientAccounts = JSON.parse(localStorage.getItem('clientAccounts') || '{}');
+        const firstLoginId = Object.keys(clientAccounts || {}).find(Boolean);
+        if (firstLoginId) return firstLoginId;
+    } catch (_) {
+        // Ignore malformed stored account metadata and continue to the next source.
+    }
+
+    try {
+        const accountsList = JSON.parse(localStorage.getItem('accountsList') || '{}');
+        const firstLoginId = Object.keys(accountsList || {}).find(Boolean);
+        if (firstLoginId) return firstLoginId;
+    } catch (_) {
+        // Ignore malformed stored account metadata and continue to the next source.
+    }
+
+    return null;
+};
+
 export const getToken = () => {
     const active_loginid = getLoginId();
     const client_accounts = JSON.parse(localStorage.getItem('accountsList')) ?? undefined;

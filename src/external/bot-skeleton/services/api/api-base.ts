@@ -350,7 +350,9 @@ class APIBase {
                 const parsed = JSON.parse(event.data);
                 const wrapper = { data: parsed };
                 otpCallbacks.forEach((cb) => cb(wrapper));
-            } catch (_) {}
+            } catch (_) {
+                // Ignore malformed OTP WebSocket messages; subscribers only receive valid JSON payloads.
+            }
         });
 
         // Override send() – route trade messages through OTP WS when connected.
@@ -366,6 +368,15 @@ class APIBase {
             if (isNewLoggedIn() && window._newSystemWS?.readyState === WebSocket.OPEN) {
                 if (data && typeof data === 'object') {
                     const firstKey = Object.keys(data)[0];
+
+                    // Market-data streams are created on the legacy WebSocket so they must also
+                    // be forgotten on that same socket. Sending `forget_all: 'ticks'` through the
+                    // new-auth WebSocket leaves the legacy subscription alive, which causes the
+                    // Bot Builder rerun error: "already subscribed to <symbol>".
+                    if (firstKey === 'forget_all' && ['ticks', 'candles'].includes(data.forget_all)) {
+                        return originalSend(data);
+                    }
+
                     if (TRADE_MSG_TYPES.has(firstKey)) {
                         return sendViaNewSystemWithPromise(data);
                     }

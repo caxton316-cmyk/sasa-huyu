@@ -2,20 +2,12 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { observer } from 'mobx-react-lite';
 import IframeWrapper from '@/components/iframe-wrapper';
 import { getAppId } from '@/components/shared/utils/config/config';
-import { V2GetActiveToken, V2GetActiveClientId } from '@/external/bot-skeleton/services/api/appId';
+import { getMainAppActiveToken, getMainAppActiveLoginId } from '@/external/bot-skeleton/services/api/appId';
 import { redirectToLogin } from '@/components/shared/utils/login/login';
 import { LocalStore } from '@/components/shared/utils/storage/storage';
 
-const getEffectiveToken = () =>
-    V2GetActiveToken() ||
-    sessionStorage.getItem('NEW_AUTH_token') ||
-    localStorage.getItem('NEW_AUTH_token') ||
-    null;
-
-const getEffectiveLoginId = () =>
-    V2GetActiveClientId() ||
-    localStorage.getItem('active_loginid') ||
-    null;
+const getEffectiveToken = getMainAppActiveToken;
+const getEffectiveLoginId = getMainAppActiveLoginId;
 
 const Dtrader = observer(() => {
     const [iframeSrc, setIframeSrc] = useState<string>('');
