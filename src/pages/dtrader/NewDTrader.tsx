@@ -383,7 +383,7 @@ const NewDTrader: React.FC = () => {
 
   if (!isPhone) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', color: '#ddd', fontSize: '13px', background: '#111' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', color: '#ddd', fontSize: '13px', background: '#111' }}>
         {/* TOP NAV BAR */}
         <div style={{ display: 'flex', alignItems: 'center', padding: '6px 16px', background: '#1a1a1a', borderBottom: '1px solid #333', gap: '4px', overflowX: 'auto' }}>
           {navTradeTypes.map(t => (
@@ -548,30 +548,32 @@ const NewDTrader: React.FC = () => {
     );
   }
 
-  /* ─── PHONE LAYOUT ─── */
+  /* ─── PHONE LAYOUT ─── all in one screen, no scroll */
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', color: '#ddd', fontSize: '13px', background: '#111', overflow: 'hidden' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 10px', background: '#1a1a1a', borderBottom: '1px solid #333' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', color: '#333', fontSize: '13px', background: '#fff', overflow: 'hidden' }}>
+      {/* TOP NAV — compact */}
+      <div style={{ display: 'flex', gap: '4px', padding: '6px 8px', background: '#f0f0f0', overflowX: 'auto', whiteSpace: 'nowrap', borderBottom: '1px solid #ddd', alignItems: 'center', minHeight: '36px' }}>
         <select value={symbol} onChange={e => setSymbol(e.target.value)}
-          style={{ flex: 1, background: '#2a2a2a', color: '#ddd', border: '1px solid #444', borderRadius: '4px', padding: '4px 6px', fontSize: '11px' }}>
+          style={{ background: '#fff', color: '#333', border: '1px solid #ccc', borderRadius: '4px', padding: '2px 4px', fontSize: '10px' }}>
           {SYMBOLS.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <span style={{ color: connectionStatus === 'Live' ? '#4caf50' : '#ff9800', fontSize: '10px' }}>\u25CF</span>
-        {currentDigit !== null && <span style={{ color: '#ffeb3b', fontWeight: 'bold', fontSize: '16px' }}>{currentDigit}</span>}
-        <button onClick={() => setShowChart(!showChart)}
-          style={{ background: '#333', color: '#ddd', border: '1px solid #555', borderRadius: '4px', padding: '4px 8px', fontSize: '11px', cursor: 'pointer' }}>
-          {showChart ? 'Hide' : 'Chart'}
-        </button>
+        {navTradeTypes.map(t => (
+          <button key={t.value} onClick={() => setTradeType(t.value)}
+            style={{
+              padding: '4px 10px', borderRadius: '14px', border: 'none', cursor: 'pointer',
+              fontSize: '10px', whiteSpace: 'nowrap', fontWeight: tradeType === t.value ? 'bold' : 'normal',
+              background: tradeType === t.value ? '#222' : 'transparent',
+              color: tradeType === t.value ? '#fff' : '#555',
+            }}>
+            {t.value === 'rise_fall' ? '\uD83D\uDD25 ' : ''}{t.label}
+          </button>
+        ))}
+        <span style={{ marginLeft: 'auto', color: connectionStatus === 'Live' ? '#4caf50' : '#ff9800', fontSize: '8px' }}>\u25CF</span>
       </div>
-      {showChart && (
-        <div style={{ height: '180px', minHeight: '180px', position: 'relative', borderBottom: '1px solid #222' }}>
-          <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
-        </div>
-      )}
 
-      {/* Digit Circles */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '4px', maxWidth: '400px', margin: '0 auto' }}>
+      {/* DIGIT CIRCLES — 2 rows of 5, bigger */}
+      <div style={{ flex: '1 1 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px 8px', background: '#fff', minHeight: 0 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px 12px', width: '100%', maxWidth: '320px' }}>
           {Array.from({ length: 10 }, (_, i) => {
             const isCurrent = currentDigit === i;
             const isHighlight = exitHighlight?.digit === i;
@@ -581,59 +583,100 @@ const NewDTrader: React.FC = () => {
             return (
               <div key={i} style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => setBarrier(String(i))}>
                 <div style={{
-                  width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center',
+                  width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center',
                   justifyContent: 'center', margin: '0 auto',
-                  background: isHighlight ? hlColor : (isCurrent ? '#ffeb3b' : (isBarrier ? '#4fc3f7' : '#333')),
-                  color: (isCurrent || isBarrier) && !isHighlight ? '#000' : '#fff',
-                  fontWeight: 'bold', fontSize: '12px',
-                  boxShadow: isCurrent ? '0 0 6px rgba(255,235,59,0.5)' : (isBarrier ? '0 0 6px rgba(79,195,247,0.5)' : 'none'),
+                  background: isHighlight ? hlColor : (isCurrent ? '#ffeb3b' : (isBarrier ? '#4fc3f7' : '#e0e0e0')),
+                  color: (isCurrent || isBarrier) && !isHighlight ? '#000' : '#333',
+                  fontWeight: 'bold', fontSize: '16px',
+                  boxShadow: isCurrent ? '0 0 8px rgba(255,235,59,0.6)' : (isBarrier ? '0 0 8px rgba(79,195,247,0.6)' : 'none'),
                 }}>{i}</div>
-                <div style={{ marginTop: '2px', height: '3px', background: '#2a2a2a', borderRadius: '2px', overflow: 'hidden' }}>
+                <div style={{ marginTop: '2px', height: '3px', background: '#e0e0e0', borderRadius: '2px', overflow: 'hidden' }}>
                   <div style={{ height: '100%', width: `${pct}%`, background: isHighlight ? hlColor : (pct > 12 ? '#4caf50' : pct > 9 ? '#ff9800' : '#f44336') }} />
                 </div>
-                <div style={{ fontSize: '8px', color: '#888' }}>{pct.toFixed(1)}</div>
+                <div style={{ fontSize: '9px', color: '#999' }}>{pct.toFixed(1)}</div>
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* Bottom Trade Bar */}
-      <div style={{ padding: '6px 10px', background: '#1a1a1a', borderTop: '1px solid #333' }}>
-        <div style={{ display: 'flex', gap: '4px', marginBottom: '6px', overflowX: 'auto' }}>
-          {navTradeTypes.map(t => (
-            <button key={t.value} onClick={() => setTradeType(t.value)}
-              style={{
-                padding: '4px 10px', borderRadius: '12px', border: 'none', cursor: 'pointer', fontSize: '10px', whiteSpace: 'nowrap',
-                background: tradeType === t.value ? '#2a2a2a' : 'transparent',
-                color: tradeType === t.value ? '#fff' : '#666',
-              }}>{t.label}</button>
-          ))}
-        </div>
-        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+      {/* BOTTOM TRADING PANEL — fixed, no scroll */}
+      <div style={{ background: '#fff', borderTop: '1px solid #e0e0e0', padding: '6px 10px 10px' }}>
+        {/* Direction Toggle */}
+        <div style={{ display: 'flex', gap: '0', marginBottom: '6px', borderRadius: '6px', overflow: 'hidden', border: '1px solid #ddd' }}>
           {currentContracts.map(ct => (
             <button key={ct} onClick={() => setContractType(ct)}
               style={{
-                padding: '6px 10px', borderRadius: '4px', border: contractType === ct ? '2px solid #ff4444' : '1px solid #444',
-                background: contractType === ct ? '#2a1a1a' : '#1a1a1a',
-                color: contractType === ct ? '#ff4444' : '#888', cursor: 'pointer', fontSize: '11px', flex: 1,
+                flex: 1, padding: '8px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold',
+                background: contractType === ct ? '#fff' : '#f5f5f5',
+                color: contractType === ct ? '#4caf50' : '#999',
+                borderBottom: contractType === ct ? '2px solid #4caf50' : '2px solid transparent',
               }}>
               {contractLabels[ct] || ct}
             </button>
           ))}
-          <input type="number" min={0.5} step={0.5} value={stake}
-            onChange={e => setStake(Math.max(0.5, Number(e.target.value) || 0.5))}
-            style={{ width: '60px', background: '#2a2a2a', color: '#ddd', border: '1px solid #444', borderRadius: '4px', padding: '6px 6px', fontSize: '12px', textAlign: 'center' }} />
-          <button onClick={() => handleBuyContract(contractType)}
-            disabled={isTrading || currentPrice === null}
-            style={{
-              padding: '6px 14px', borderRadius: '4px', border: 'none',
-              background: isTrading ? '#555' : '#d32f2f', color: '#fff',
-              cursor: isTrading ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: '12px',
-            }}>
-            {isTrading ? '...' : 'Buy'}
-          </button>
         </div>
+
+        {/* Trade Parameters Row */}
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
+          <div style={{ flex: 1, background: '#f5f5f5', borderRadius: '6px', padding: '4px 6px' }}>
+            <div style={{ fontSize: '8px', color: '#999', marginBottom: '1px' }}>Duration</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+              <input type="number" min={1} value={duration}
+                onChange={e => setDuration(Math.max(1, Number(e.target.value) || 1))}
+                style={{ width: '36px', background: 'transparent', color: '#333', border: 'none', fontSize: '12px', fontWeight: 'bold', padding: '0', outline: 'none' }} />
+              <select value={durationUnit} onChange={e => setDurationUnit(e.target.value as 't' | 'm')}
+                style={{ background: 'transparent', color: '#666', border: 'none', fontSize: '10px', outline: 'none', padding: '0' }}>
+                <option value="t">ticks</option>
+                <option value="m">min</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ flex: 1, background: '#f5f5f5', borderRadius: '6px', padding: '4px 6px' }}>
+            <div style={{ fontSize: '8px', color: '#999', marginBottom: '1px' }}>Stake</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+              <span style={{ color: '#333', fontSize: '12px', fontWeight: 'bold' }}>$</span>
+              <input type="number" min={0.5} step={0.5} value={stake}
+                onChange={e => setStake(Math.max(0.5, Number(e.target.value) || 0.5))}
+                style={{ width: '40px', background: 'transparent', color: '#333', border: 'none', fontSize: '12px', fontWeight: 'bold', padding: '0', outline: 'none' }} />
+            </div>
+          </div>
+          <div style={{ flex: 1, background: '#f5f5f5', borderRadius: '6px', padding: '4px 6px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div style={{ fontSize: '8px', color: '#999', marginBottom: '1px' }}>Allow equals</div>
+            <div onClick={() => setAllowEquals(!allowEquals)} style={{ cursor: 'pointer' }}>
+              <span style={{ fontSize: '12px', fontWeight: 'bold', color: allowEquals ? '#4caf50' : '#ccc' }}>
+                {allowEquals ? 'On' : '\u2014'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Barrier (if applicable) */}
+        {(tradeType === 'over_under' || tradeType === 'digits') && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+            <span style={{ fontSize: '10px', color: '#999' }}>Barrier:</span>
+            <input type="number" min={0} max={9} value={barrier}
+              onChange={e => setBarrier(e.target.value.replace(/[^0-9]/g, '').slice(0, 1) || '0')}
+              style={{ width: '40px', background: '#f5f5f5', color: '#333', border: '1px solid #ddd', borderRadius: '4px', padding: '3px 6px', fontSize: '12px', textAlign: 'center' }} />
+          </div>
+        )}
+
+        {/* Buy Button */}
+        <button onClick={() => handleBuyContract(contractType)}
+          disabled={isTrading || currentPrice === null}
+          style={{
+            width: '100%', padding: '12px', borderRadius: '6px', border: 'none',
+            background: isTrading ? '#aaa' : '#4caf50', color: '#fff',
+            cursor: isTrading ? 'not-allowed' : 'pointer',
+            fontWeight: 'bold', fontSize: '15px',
+          }}>
+          {isTrading ? 'Buying...' : 'Buy'}
+        </button>
+        {payout && (
+          <div style={{ textAlign: 'center', marginTop: '4px', color: '#999', fontSize: '11px' }}>
+            Payout: ${payout}
+          </div>
+        )}
       </div>
     </div>
   );
