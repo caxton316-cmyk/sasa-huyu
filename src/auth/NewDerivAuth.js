@@ -252,7 +252,6 @@ export async function startNewSignup() {
     code_challenge:        challenge,
     code_challenge_method: "S256",
     prompt:                "registration",
-    app_id:                CONFIG.legacyAppId
   })
 
   window.location.href = CONFIG.authUrl + "?" + params.toString()
