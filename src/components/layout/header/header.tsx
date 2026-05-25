@@ -11,7 +11,7 @@ import { useStore } from '@/hooks/useStore';
 import useTMB from '@/hooks/useTMB';
 import { handleOidcAuthFailure } from '@/utils/auth-utils';
 import { getBalanceSwapState } from '@/utils/balance-swap-utils';
-import { redirectToNewAccountsLogin } from '@/utils/pkce';
+import { startNewLogin } from '@/auth/NewDerivAuth';
 import { StandaloneCircleUserRegularIcon } from '@deriv/quill-icons/Standalone';
 
 
@@ -297,7 +297,7 @@ const AppHeader = observer(({ isAuthenticating }: TAppHeaderProps) => {
                             setIsNewLoginLoading(true);
                             setNewLoginError('');
                             try {
-                                await redirectToNewAccountsLogin();
+                                await startNewLogin();
                                 // If we reach here the redirect didn't fire — re-enable
                                 setIsNewLoginLoading(false);
                             } catch (error) {

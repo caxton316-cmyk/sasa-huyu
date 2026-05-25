@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Cookies from 'js-cookie';
 import { generateOAuthURL } from '@/components/shared';
-import { redirectToNewAccountsLogin } from '@/utils/pkce';
-import { startNewSignup } from '@/auth/NewDerivAuth';
+import { startNewLogin, startNewSignup } from '@/auth/NewDerivAuth';
 import './LoginScreen.scss';
 
 const isUserLoggedIn = () => {
@@ -62,7 +61,7 @@ const StandaloneLoginScreen: React.FC = () => {
         setIsNewLoginLoading(true);
         setNewLoginError('');
         try {
-            await redirectToNewAccountsLogin();
+            await startNewLogin();
             setIsNewLoginLoading(false);
         } catch (error) {
             console.error('[New Accounts Login]', error);

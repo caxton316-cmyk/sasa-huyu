@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { generateOAuthURL } from '@/components/shared';
-import { redirectToNewAccountsLogin } from '@/utils/pkce';
-import { startNewSignup } from '@/auth/NewDerivAuth';
+import { startNewLogin, startNewSignup } from '@/auth/NewDerivAuth';
 import useTMB from '@/hooks/useTMB';
 import './LoginScreen.scss';
 
@@ -36,7 +35,7 @@ const LoginScreenInner = () => {
         setIsNewLoginLoading(true);
         setNewLoginError('');
         try {
-            await redirectToNewAccountsLogin();
+            await startNewLogin();
             setIsNewLoginLoading(false);
         } catch (error) {
             console.error('[New Accounts Login]', error);

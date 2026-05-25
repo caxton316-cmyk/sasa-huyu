@@ -284,7 +284,8 @@ export async function handleNewCallback() {
     throw new Error("Missing state parameter from Deriv")
   }
   
-  const savedState = sessionStorage.getItem('deriv_oauth_state')
+  // Read from localStorage with our keys (startNewLogin/startNewSignup save there)
+  const savedState = localStorage.getItem(K.state)
   
   if (!savedState) {
     throw new Error(
@@ -302,7 +303,7 @@ export async function handleNewCallback() {
     )
   }
   
-  const verifier = sessionStorage.getItem('deriv_code_verifier')
+  const verifier = localStorage.getItem(K.verifier)
   
   if (!verifier) {
     throw new Error(
@@ -343,8 +344,8 @@ export async function handleNewCallback() {
     const errMsg = data.error_description || data.error || 
       "Unknown error"
     console.error("[NEW AUTH] Token error:", errMsg)
-    sessionStorage.removeItem('deriv_code_verifier')
-    sessionStorage.removeItem('deriv_oauth_state')
+    localStorage.removeItem(K.verifier)
+    localStorage.removeItem(K.state)
     throw new Error("Login failed: " + errMsg)
   }
   
@@ -355,8 +356,8 @@ export async function handleNewCallback() {
     K.expiry,
     String(Date.now() + (data.expires_in * 1000))
   )
-  sessionStorage.removeItem('deriv_code_verifier')
-  sessionStorage.removeItem('deriv_oauth_state')
+  localStorage.removeItem(K.verifier)
+  localStorage.removeItem(K.state)
   
   // Set legacy cookie so app recognizes logged-in state
   const cookieDomain = window.location.hostname
