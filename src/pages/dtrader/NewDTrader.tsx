@@ -14,6 +14,7 @@ const TRADE_TYPES = [
   { value: 'over_under', label: 'Over/Under' },
   { value: 'digits', label: 'Digits' },
   { value: 'even_odd', label: 'Even/Odd' },
+  { value: 'accumulator', label: 'Accumulator' },
 ];
 
 function getPipSize(symbol: string): number { return pip_sizes[symbol] || 2; }
@@ -32,6 +33,7 @@ interface ContractInfo {
 const contractLabels: Record<string, string> = {
   CALL: 'Rise', PUT: 'Fall', DIGITOVER: 'Over', DIGITUNDER: 'Under',
   DIGITMATCH: 'Match', DIGITDIFF: 'Diff', DIGITEVEN: 'Even', DIGITODD: 'Odd',
+  ACCU: 'Buy',
 };
 
 const NewDTrader: React.FC = () => {
@@ -49,6 +51,7 @@ const NewDTrader: React.FC = () => {
   const durationUnitRef = useRef<'t' | 'm'>('t');
   const tradeTypeRef = useRef('rise_fall');
   const pipSizeRef = useRef(2);
+  const growthRateRef = useRef(0.01);
 
   const [symbol, setSymbol] = useState('R_100');
   const [tradeType, setTradeType] = useState('rise_fall');
@@ -72,6 +75,8 @@ const NewDTrader: React.FC = () => {
   const [contractType, setContractType] = useState('CALL');
   const [payout, setPayout] = useState<string | null>(null);
   const [tradeResult, setTradeResult] = useState<{ isWin: boolean; profit: number; contract_type: string; entry_digit: number; exit_digit: number } | null>(null);
+  const [growthRate, setGrowthRate] = useState(0.01);
+  const [takeProfit, setTakeProfit] = useState('');
 
   const isPhone = typeof window !== 'undefined' && window.innerWidth < 768;
   const contractTypes = TRADE_TYPES.find(t => t.value === tradeType)?.label || 'Rise/Fall';
@@ -79,6 +84,7 @@ const NewDTrader: React.FC = () => {
   stakeRef.current = stake; symbolRef.current = symbol; barrierRef.current = barrier;
   durationRef.current = duration; durationUnitRef.current = durationUnit;
   tradeTypeRef.current = tradeType; pipSizeRef.current = getPipSize(symbol);
+  growthRateRef.current = growthRate;
 
   const drawChart = useCallback(() => {
     const canvas = canvasRef.current;
@@ -320,11 +326,20 @@ const NewDTrader: React.FC = () => {
   const handleBuyContract = async (ct: string) => {
     if (isTrading) return;
     setIsTrading(true);
+    const isAccu = tradeType === 'accumulator';
     const params: Record<string, any> = {
       amount: stake, basis: 'stake', currency: 'USD',
-      duration, duration_unit: durationUnit,
       symbol, contract_type: ct,
     };
+    if (isAccu) {
+      params.growth_rate = growthRate;
+      if (takeProfit) {
+        params.limit_order = { take_profit: Number(takeProfit) };
+      }
+    } else {
+      params.duration = duration;
+      params.duration_unit = durationUnit;
+    }
     if (ct === 'DIGITOVER' || ct === 'DIGITUNDER' || ct === 'DIGITMATCH' || ct === 'DIGITDIFF') {
       params.barrier = barrier;
     }
@@ -337,16 +352,25 @@ const NewDTrader: React.FC = () => {
 
   const requestProposal = async (ct: string) => {
     try {
+      const isAccu = tradeType === 'accumulator';
       const params: Record<string, any> = {
         proposal: 1, amount: stake, basis: 'stake', currency: 'USD',
-        duration, duration_unit: durationUnit, symbol, contract_type: ct,
+        symbol, contract_type: ct,
       };
+      if (isAccu) {
+        params.growth_rate = growthRate;
+      } else {
+        params.duration = duration;
+        params.duration_unit = durationUnit;
+      }
       if (ct === 'DIGITOVER' || ct === 'DIGITUNDER' || ct === 'DIGITMATCH' || ct === 'DIGITDIFF') {
         params.barrier = barrier;
       }
       const res = await sendViaNewSystemWithPromise(params);
       if (res?.proposal?.payout) {
         setPayout(Number(res.proposal.payout).toFixed(2));
+      } else if (isAccu && res?.proposal?.longcode) {
+        setPayout('ACCU');
       }
     } catch { setPayout(null); }
   };
@@ -356,7 +380,7 @@ const NewDTrader: React.FC = () => {
     const t = setTimeout(() => requestProposal(contractType), 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contractType, stake, duration, durationUnit, symbol, barrier]);
+  }, [contractType, stake, duration, durationUnit, symbol, barrier, growthRate, tradeType]);
 
   const currentContracts: string[] = (() => {
     switch (tradeType) {
@@ -364,6 +388,7 @@ const NewDTrader: React.FC = () => {
       case 'over_under': return ['DIGITOVER', 'DIGITUNDER'];
       case 'digits': return ['DIGITMATCH', 'DIGITDIFF'];
       case 'even_odd': return ['DIGITEVEN', 'DIGITODD'];
+      case 'accumulator': return ['ACCU'];
       default: return ['CALL', 'PUT'];
     }
   })();
@@ -478,19 +503,26 @@ const NewDTrader: React.FC = () => {
               </div>
 
               {/* Direction/Contract Type Toggle */}
-              <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
-                {currentContracts.map(ct => (
-                  <button key={ct} onClick={() => setContractType(ct)}
-                    style={{
-                      flex: 1, padding: '10px', borderRadius: '6px', border: contractType === ct ? '2px solid #ff4444' : '2px solid #333',
-                      background: contractType === ct ? '#2a1a1a' : '#1a1a1a',
-                      color: contractType === ct ? '#ff4444' : '#666', cursor: 'pointer',
-                      fontWeight: contractType === ct ? 'bold' : 'normal', fontSize: '13px',
-                    }}>
-                    {contractLabels[ct] || ct}
-                  </button>
-                ))}
-              </div>
+              {tradeType === 'accumulator' ? (
+                <div style={{ textAlign: 'center', padding: '10px', marginBottom: '8px', background: '#1a3a1a', borderRadius: '6px', border: '1px solid #2a5a2a' }}>
+                  <span style={{ color: '#4caf50', fontWeight: 'bold', fontSize: '14px' }}>Accumulator</span>
+                  <div style={{ color: '#888', fontSize: '11px', marginTop: '2px' }}>Compounding per tick</div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
+                  {currentContracts.map(ct => (
+                    <button key={ct} onClick={() => setContractType(ct)}
+                      style={{
+                        flex: 1, padding: '10px', borderRadius: '6px', border: contractType === ct ? '2px solid #ff4444' : '2px solid #333',
+                        background: contractType === ct ? '#2a1a1a' : '#1a1a1a',
+                        color: contractType === ct ? '#ff4444' : '#666', cursor: 'pointer',
+                        fontWeight: contractType === ct ? 'bold' : 'normal', fontSize: '13px',
+                      }}>
+                      {contractLabels[ct] || ct}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Barrier (for digits/over_under) */}
               {(tradeType === 'over_under' || tradeType === 'digits') && (
@@ -502,20 +534,49 @@ const NewDTrader: React.FC = () => {
                 </div>
               )}
 
-              {/* Duration */}
-              <div style={fieldRow}>
-                <span style={fieldLabel}>Duration</span>
-                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                  <input type="number" min={1} value={duration}
-                    onChange={e => setDuration(Math.max(1, Number(e.target.value) || 1))}
-                    style={{ ...fieldVal, width: '50px', textAlign: 'center' }} />
-                  <select value={durationUnit} onChange={e => setDurationUnit(e.target.value as 't' | 'm')}
-                    style={{ background: '#2a2a2a', color: '#ddd', border: '1px solid #444', borderRadius: '4px', padding: '4px 6px', fontSize: '12px' }}>
-                    <option value="m">min</option>
-                    <option value="t">ticks</option>
-                  </select>
-                </div>
-              </div>
+              {/* Growth Rate (only for Accumulator) */}
+              {tradeType === 'accumulator' ? (
+                <>
+                  <div style={fieldRow}>
+                    <span style={fieldLabel}>Growth Rate</span>
+                    <select value={growthRate} onChange={e => setGrowthRate(Number(e.target.value))}
+                      style={{ background: '#2a2a2a', color: '#ddd', border: '1px solid #444', borderRadius: '4px', padding: '4px 8px', fontSize: '12px' }}>
+                      <option value={0.01}>1%</option>
+                      <option value={0.02}>2%</option>
+                      <option value={0.03}>3%</option>
+                      <option value={0.04}>4%</option>
+                      <option value={0.05}>5%</option>
+                    </select>
+                  </div>
+                  <div style={fieldRow}>
+                    <span style={fieldLabel}>Take Profit</span>
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                      <span style={{ color: '#888', fontSize: '12px' }}>$</span>
+                      <input type="number" min={0} value={takeProfit}
+                        onChange={e => setTakeProfit(e.target.value)}
+                        placeholder="Optional"
+                        style={{ ...fieldVal, width: '80px' }} />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Duration */}
+                  <div style={fieldRow}>
+                    <span style={fieldLabel}>Duration</span>
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                      <input type="number" min={1} value={duration}
+                        onChange={e => setDuration(Math.max(1, Number(e.target.value) || 1))}
+                        style={{ ...fieldVal, width: '50px', textAlign: 'center' }} />
+                      <select value={durationUnit} onChange={e => setDurationUnit(e.target.value as 't' | 'm')}
+                        style={{ background: '#2a2a2a', color: '#ddd', border: '1px solid #444', borderRadius: '4px', padding: '4px 6px', fontSize: '12px' }}>
+                        <option value="m">min</option>
+                        <option value="t">ticks</option>
+                      </select>
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* Stake */}
               <div style={fieldRow}>
@@ -553,13 +614,17 @@ const NewDTrader: React.FC = () => {
                   disabled={isTrading || currentPrice === null}
                   style={{
                     width: '100%', padding: '14px', borderRadius: '6px', border: 'none',
-                    background: isTrading ? '#555' : '#d32f2f', color: '#fff',
+                    background: isTrading ? '#555' : (tradeType === 'accumulator' ? '#2e7d32' : '#d32f2f'), color: '#fff',
                     cursor: isTrading ? 'not-allowed' : 'pointer',
                     fontWeight: 'bold', fontSize: '15px',
                   }}>
-                  {isTrading ? 'Buying...' : `Buy ${contractLabels[contractType] || contractType}`}
+                  {isTrading ? 'Buying...' : (tradeType === 'accumulator' ? 'Buy Accumulator' : `Buy ${contractLabels[contractType] || contractType}`)}
                 </button>
-                {payout && (
+                {tradeType === 'accumulator' ? (
+                  <div style={{ textAlign: 'center', marginTop: '8px', color: '#888', fontSize: '11px' }}>
+                    Growth: {growthRate * 100}% · Stake: ${stake}
+                  </div>
+                ) : payout && (
                   <div style={{ textAlign: 'center', marginTop: '8px', color: '#888', fontSize: '12px' }}>
                     Payout: ${payout}
                   </div>
@@ -577,7 +642,10 @@ const NewDTrader: React.FC = () => {
                   padding: '2px 4px', marginBottom: '2px', borderLeft: `2px solid ${c.is_win ? '#4caf50' : '#f44336'}`,
                   color: '#888', fontSize: '10px',
                 }}>
-                  {c.contract_type} {c.entry_digit}→{c.exit_digit ?? '?'} {c.is_win ? `+$${c.profit?.toFixed(2) || '0'}` : `-$${Math.abs(c.profit || 0).toFixed(2)}`}
+                  {c.contract_type === 'ACCU'
+                    ? `ACCU ${c.is_win ? `+$${c.profit?.toFixed(2) || '0'}` : `-$${Math.abs(c.profit || 0).toFixed(2)}`}`
+                    : `${c.contract_type} ${c.entry_digit}→${c.exit_digit ?? '?'} ${c.is_win ? `+$${c.profit?.toFixed(2) || '0'}` : `-$${Math.abs(c.profit || 0).toFixed(2)}`}`
+                  }
                 </div>
               ))}
             </div>
@@ -652,53 +720,92 @@ const NewDTrader: React.FC = () => {
       {/* BOTTOM TRADING PANEL — fixed, no scroll */}
       <div style={{ background: '#fff', borderTop: '1px solid #e0e0e0', padding: '6px 10px 10px' }}>
         {/* Direction Toggle */}
-        <div style={{ display: 'flex', gap: '0', marginBottom: '6px', borderRadius: '6px', overflow: 'hidden', border: '1px solid #ddd' }}>
-          {currentContracts.map(ct => (
-            <button key={ct} onClick={() => setContractType(ct)}
-              style={{
-                flex: 1, padding: '8px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold',
-                background: contractType === ct ? '#fff' : '#f5f5f5',
-                color: contractType === ct ? '#4caf50' : '#999',
-                borderBottom: contractType === ct ? '2px solid #4caf50' : '2px solid transparent',
-              }}>
-              {contractLabels[ct] || ct}
-            </button>
-          ))}
-        </div>
+        {tradeType === 'accumulator' ? (
+          <div style={{ textAlign: 'center', padding: '6px', marginBottom: '6px', background: '#e8f5e9', borderRadius: '6px', border: '1px solid #c8e6c9' }}>
+            <span style={{ color: '#2e7d32', fontWeight: 'bold', fontSize: '13px' }}>Accumulator</span>
+            <span style={{ color: '#666', fontSize: '10px', marginLeft: '6px' }}>{growthRate * 100}% / tick</span>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: '0', marginBottom: '6px', borderRadius: '6px', overflow: 'hidden', border: '1px solid #ddd' }}>
+            {currentContracts.map(ct => (
+              <button key={ct} onClick={() => setContractType(ct)}
+                style={{
+                  flex: 1, padding: '8px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold',
+                  background: contractType === ct ? '#fff' : '#f5f5f5',
+                  color: contractType === ct ? '#4caf50' : '#999',
+                  borderBottom: contractType === ct ? '2px solid #4caf50' : '2px solid transparent',
+                }}>
+                {contractLabels[ct] || ct}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Trade Parameters Row */}
-        <div style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
-          <div style={{ flex: 1, background: '#f5f5f5', borderRadius: '6px', padding: '4px 6px' }}>
-            <div style={{ fontSize: '8px', color: '#999', marginBottom: '1px' }}>Duration</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-              <input type="number" min={1} value={duration}
-                onChange={e => setDuration(Math.max(1, Number(e.target.value) || 1))}
-                style={{ width: '36px', background: 'transparent', color: '#333', border: 'none', fontSize: '12px', fontWeight: 'bold', padding: '0', outline: 'none' }} />
-              <select value={durationUnit} onChange={e => setDurationUnit(e.target.value as 't' | 'm')}
-                style={{ background: 'transparent', color: '#666', border: 'none', fontSize: '10px', outline: 'none', padding: '0' }}>
-                <option value="t">ticks</option>
-                <option value="m">min</option>
+        {tradeType === 'accumulator' ? (
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
+            <div style={{ flex: 1, background: '#f5f5f5', borderRadius: '6px', padding: '4px 6px' }}>
+              <div style={{ fontSize: '8px', color: '#999', marginBottom: '1px' }}>Growth Rate</div>
+              <select value={growthRate} onChange={e => setGrowthRate(Number(e.target.value))}
+                style={{ background: 'transparent', color: '#333', border: 'none', fontSize: '12px', fontWeight: 'bold', outline: 'none', padding: '0', width: '100%' }}>
+                <option value={0.01}>1%</option>
+                <option value={0.02}>2%</option>
+                <option value={0.03}>3%</option>
+                <option value={0.04}>4%</option>
+                <option value={0.05}>5%</option>
               </select>
             </div>
-          </div>
-          <div style={{ flex: 1, background: '#f5f5f5', borderRadius: '6px', padding: '4px 6px' }}>
-            <div style={{ fontSize: '8px', color: '#999', marginBottom: '1px' }}>Stake</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-              <span style={{ color: '#333', fontSize: '12px', fontWeight: 'bold' }}>$</span>
-              <input type="number" min={0.5} step={0.5} value={stake}
-                onChange={e => setStake(Math.max(0.5, Number(e.target.value) || 0.5))}
-                style={{ width: '40px', background: 'transparent', color: '#333', border: 'none', fontSize: '12px', fontWeight: 'bold', padding: '0', outline: 'none' }} />
+            <div style={{ flex: 1, background: '#f5f5f5', borderRadius: '6px', padding: '4px 6px' }}>
+              <div style={{ fontSize: '8px', color: '#999', marginBottom: '1px' }}>Stake</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                <span style={{ color: '#333', fontSize: '12px', fontWeight: 'bold' }}>$</span>
+                <input type="number" min={0.5} step={0.5} value={stake}
+                  onChange={e => setStake(Math.max(0.5, Number(e.target.value) || 0.5))}
+                  style={{ width: '40px', background: 'transparent', color: '#333', border: 'none', fontSize: '12px', fontWeight: 'bold', padding: '0', outline: 'none' }} />
+              </div>
+            </div>
+            <div style={{ flex: 1, background: '#f5f5f5', borderRadius: '6px', padding: '4px 6px' }}>
+              <div style={{ fontSize: '8px', color: '#999', marginBottom: '1px' }}>Take Profit</div>
+              <input type="number" min={0} value={takeProfit}
+                onChange={e => setTakeProfit(e.target.value)}
+                placeholder="$"
+                style={{ width: '100%', background: 'transparent', color: '#333', border: 'none', fontSize: '12px', fontWeight: 'bold', padding: '0', outline: 'none' }} />
             </div>
           </div>
-          <div style={{ flex: 1, background: '#f5f5f5', borderRadius: '6px', padding: '4px 6px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <div style={{ fontSize: '8px', color: '#999', marginBottom: '1px' }}>Allow equals</div>
-            <div onClick={() => setAllowEquals(!allowEquals)} style={{ cursor: 'pointer' }}>
-              <span style={{ fontSize: '12px', fontWeight: 'bold', color: allowEquals ? '#4caf50' : '#ccc' }}>
-                {allowEquals ? 'On' : '\u2014'}
-              </span>
+        ) : (
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
+            <div style={{ flex: 1, background: '#f5f5f5', borderRadius: '6px', padding: '4px 6px' }}>
+              <div style={{ fontSize: '8px', color: '#999', marginBottom: '1px' }}>Duration</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                <input type="number" min={1} value={duration}
+                  onChange={e => setDuration(Math.max(1, Number(e.target.value) || 1))}
+                  style={{ width: '36px', background: 'transparent', color: '#333', border: 'none', fontSize: '12px', fontWeight: 'bold', padding: '0', outline: 'none' }} />
+                <select value={durationUnit} onChange={e => setDurationUnit(e.target.value as 't' | 'm')}
+                  style={{ background: 'transparent', color: '#666', border: 'none', fontSize: '10px', outline: 'none', padding: '0' }}>
+                  <option value="t">ticks</option>
+                  <option value="m">min</option>
+                </select>
+              </div>
+            </div>
+            <div style={{ flex: 1, background: '#f5f5f5', borderRadius: '6px', padding: '4px 6px' }}>
+              <div style={{ fontSize: '8px', color: '#999', marginBottom: '1px' }}>Stake</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                <span style={{ color: '#333', fontSize: '12px', fontWeight: 'bold' }}>$</span>
+                <input type="number" min={0.5} step={0.5} value={stake}
+                  onChange={e => setStake(Math.max(0.5, Number(e.target.value) || 0.5))}
+                  style={{ width: '40px', background: 'transparent', color: '#333', border: 'none', fontSize: '12px', fontWeight: 'bold', padding: '0', outline: 'none' }} />
+              </div>
+            </div>
+            <div style={{ flex: 1, background: '#f5f5f5', borderRadius: '6px', padding: '4px 6px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div style={{ fontSize: '8px', color: '#999', marginBottom: '1px' }}>Allow equals</div>
+              <div onClick={() => setAllowEquals(!allowEquals)} style={{ cursor: 'pointer' }}>
+                <span style={{ fontSize: '12px', fontWeight: 'bold', color: allowEquals ? '#4caf50' : '#ccc' }}>
+                  {allowEquals ? 'On' : '\u2014'}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Barrier (if applicable) */}
         {(tradeType === 'over_under' || tradeType === 'digits') && (
@@ -715,13 +822,17 @@ const NewDTrader: React.FC = () => {
           disabled={isTrading || currentPrice === null}
           style={{
             width: '100%', padding: '12px', borderRadius: '6px', border: 'none',
-            background: isTrading ? '#aaa' : '#4caf50', color: '#fff',
+            background: isTrading ? '#aaa' : (tradeType === 'accumulator' ? '#2e7d32' : '#4caf50'), color: '#fff',
             cursor: isTrading ? 'not-allowed' : 'pointer',
             fontWeight: 'bold', fontSize: '15px',
           }}>
-          {isTrading ? 'Buying...' : 'Buy'}
+          {isTrading ? 'Buying...' : (tradeType === 'accumulator' ? 'Buy Accumulator' : 'Buy')}
         </button>
-        {payout && (
+        {tradeType === 'accumulator' ? (
+          <div style={{ textAlign: 'center', marginTop: '4px', color: '#999', fontSize: '10px' }}>
+            {growthRate * 100}% growth · ${stake} stake
+          </div>
+        ) : payout && (
           <div style={{ textAlign: 'center', marginTop: '4px', color: '#999', fontSize: '11px' }}>
             Payout: ${payout}
           </div>
