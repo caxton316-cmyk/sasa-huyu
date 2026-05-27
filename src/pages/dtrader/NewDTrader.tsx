@@ -69,6 +69,7 @@ const NewDTrader: React.FC = () => {
   const [showChart, setShowChart] = useState(true);
   const [contractType, setContractType] = useState('CALL');
   const [payout, setPayout] = useState<string | null>(null);
+  const [tradeResult, setTradeResult] = useState<{ isWin: boolean; profit: number; contract_type: string; entry_digit: number; exit_digit: number } | null>(null);
 
   const isPhone = typeof window !== 'undefined' && window.innerWidth < 768;
   const contractTypes = TRADE_TYPES.find(t => t.value === tradeType)?.label || 'Rise/Fall';
@@ -291,12 +292,13 @@ const NewDTrader: React.FC = () => {
             const exitDigit = exitTick ? extractDigit(exitTick, pipSizeRef.current) : 0;
             const profit = Number(poc.profit ?? 0);
             const isWin = profit >= 0;
+            const ac = activeContractsRef.current.find(c => c.id === cid);
             setExitHighlight({ digit: exitDigit, win: isWin });
             setTimeout(() => setExitHighlight(null), 3000);
+            setTradeResult({ isWin, profit, contract_type: poc.contract_type || ac?.contract_type || '', entry_digit: ac?.entry_digit ?? 0, exit_digit: exitDigit });
             setActiveContracts(prev => { activeContractsRef.current = prev.filter(c => c.id !== cid); return activeContractsRef.current; });
             setContractHistory(prev => {
               if (prev.find(c => c.id === cid)) return prev;
-              const ac = activeContractsRef.current.find(c => c.id === cid);
               return [...prev, { id: cid, contract_type: poc.contract_type || ac?.contract_type || '', stake: Number(poc.buy_price ?? ac?.stake ?? 0), symbol: poc.symbol || ac?.symbol || '', entry_tick: poc.entry_tick ?? ac?.entry_tick ?? 0, exit_tick: exitTick, profit, is_sold: true, entry_digit: ac?.entry_digit ?? 0, exit_digit: exitDigit, is_win: isWin }];
             });
             setSessionStats(prev => ({ wins: prev.wins + (isWin ? 1 : 0), losses: prev.losses + (isWin ? 0 : 1), profit: prev.profit + profit }));
@@ -363,6 +365,12 @@ const NewDTrader: React.FC = () => {
   })();
 
   useEffect(() => { setContractType(currentContracts[0]); }, [tradeType, currentContracts[0]]);
+
+  useEffect(() => {
+    if (!tradeResult) return;
+    const t = setTimeout(() => setTradeResult(null), 2000);
+    return () => clearTimeout(t);
+  }, [tradeResult]);
 
   const navTradeTypes = [
     { value: 'rise_fall', label: 'Rise/Fall' },
@@ -545,6 +553,16 @@ const NewDTrader: React.FC = () => {
           </div>
         </div>
       </div>
+      {tradeResult && (
+        <div style={{
+          position: 'fixed', top: '16px', right: '16px', zIndex: 9999,
+          background: tradeResult.isWin ? '#1b5e20' : '#b71c1c',
+          color: '#fff', padding: '12px 20px', borderRadius: '8px',
+          fontSize: '14px', fontWeight: 'bold', boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+        }}>
+          {tradeResult.isWin ? 'WIN' : 'LOSS'} · {tradeResult.contract_type} · {tradeResult.entry_digit}→{tradeResult.exit_digit} · {tradeResult.isWin ? '+' : ''}${tradeResult.profit.toFixed(2)}
+        </div>
+      )}
     );
   }
 
@@ -678,6 +696,17 @@ const NewDTrader: React.FC = () => {
           </div>
         )}
       </div>
+      {tradeResult && (
+        <div style={{
+          position: 'fixed', top: '60px', left: '50%', transform: 'translateX(-50%)', zIndex: 9999,
+          background: tradeResult.isWin ? '#1b5e20' : '#b71c1c',
+          color: '#fff', padding: '10px 18px', borderRadius: '8px',
+          fontSize: '13px', fontWeight: 'bold', boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          whiteSpace: 'nowrap',
+        }}>
+          {tradeResult.isWin ? 'WIN' : 'LOSS'} · {tradeResult.contract_type} · {tradeResult.entry_digit}→{tradeResult.exit_digit} · {tradeResult.isWin ? '+' : ''}${tradeResult.profit.toFixed(2)}
+        </div>
+      )}
     </div>
   );
 };
