@@ -439,23 +439,28 @@ const NewDTrader: React.FC = () => {
             <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
               <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0', background: '#151515', borderTop: '1px solid #222' }}>
-              <div style={{ display: 'flex', gap: '4px' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '6px 0', background: '#1a1a1a', borderTop: '1px solid #333' }}>
+              <div style={{ display: 'flex', gap: '6px' }}>
                 {Array.from({ length: 10 }, (_, i) => {
                   const isCurrent = currentDigit === i;
                   const isHighlight = exitHighlight?.digit === i;
                   const hlColor = exitHighlight ? (exitHighlight.win ? '#4caf50' : '#f44336') : '#ffeb3b';
                   const isBarrier = String(i) === barrier;
+                  const pct = tickHistory.length > 0 ? (digitCounts[i] / tickHistory.length) * 100 : 0;
                   return (
                     <div key={i} style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => setBarrier(String(i))}>
                       <div style={{
-                        width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center',
+                        width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center',
                         justifyContent: 'center',
-                        background: isHighlight ? hlColor : (isCurrent ? '#ffeb3b' : (isBarrier ? '#4fc3f7' : '#333')),
-                        color: (isCurrent || isBarrier) && !isHighlight ? '#000' : '#fff',
-                        fontWeight: 'bold', fontSize: '14px',
-                        boxShadow: isCurrent ? '0 0 6px rgba(255,235,59,0.5)' : (isBarrier ? '0 0 6px rgba(79,195,247,0.5)' : 'none'),
+                        background: isHighlight ? hlColor : (isCurrent ? '#ffeb3b' : (isBarrier ? '#4fc3f7' : '#e0e0e0')),
+                        color: (isCurrent || isBarrier) && !isHighlight ? '#000' : '#333',
+                        fontWeight: 'bold', fontSize: '15px',
+                        boxShadow: isCurrent ? '0 0 8px rgba(255,235,59,0.6)' : (isBarrier ? '0 0 8px rgba(79,195,247,0.6)' : 'none'),
                       }}>{i}</div>
+                      <div style={{ marginTop: '2px', height: '3px', background: '#444', borderRadius: '2px', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${pct}%`, background: isHighlight ? hlColor : (pct > 12 ? '#4caf50' : pct > 9 ? '#ff9800' : '#f44336') }} />
+                      </div>
+                      <div style={{ fontSize: '9px', color: '#aaa' }}>{pct.toFixed(1)}</div>
                     </div>
                   );
                 })}
