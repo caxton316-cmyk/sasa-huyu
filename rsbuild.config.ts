@@ -56,11 +56,7 @@ export default defineConfig({
                 './src/components/shims/ui-submenu/index.js'
             ),
             '../Submenu /index.js': path.resolve(__dirname, './src/components/shims/ui-submenu/index.js'),
-            // Route all @deriv/quill-icons paths to the top-level package (now complete with all categories)
-            '@deriv/quill-icons': path.resolve(
-                __dirname,
-                'node_modules/@deriv/quill-icons/dist/esm/index.js'
-            ),
+            // Explicit subpath aliases for @deriv/quill-icons (must come before the broad alias)
             '@deriv/quill-icons/Legacy': path.resolve(
                 __dirname,
                 'node_modules/@deriv/quill-icons/dist/esm/react/Legacy'
@@ -77,9 +73,10 @@ export default defineConfig({
                 __dirname,
                 'node_modules/@deriv/quill-icons/dist/esm/react/Flags'
             ),
+            // Shim for "Illustration" (not in the installed version; map to Illustrative)
             '@deriv/quill-icons/Illustration': path.resolve(
                 __dirname,
-                'node_modules/@deriv/quill-icons/dist/esm/react/Illustration'
+                'src/components/shims/quill-icons-illustration/index.js'
             ),
             '@deriv/quill-icons/Logo': path.resolve(
                 __dirname,
@@ -108,11 +105,6 @@ export default defineConfig({
             '@deriv/quill-icons/Illustrative': path.resolve(
                 __dirname,
                 'node_modules/@deriv/quill-icons/dist/esm/react/Illustrative'
-            ),
-            // Shim for the "Illustration" sub-path removed in the installed version
-            '@deriv/quill-icons/Illustration': path.resolve(
-                __dirname,
-                'src/components/shims/quill-icons-illustration/index.js'
             ),
             '@deriv/quill-icons/TradeTypes': path.resolve(
                 __dirname,
