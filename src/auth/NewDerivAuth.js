@@ -142,9 +142,9 @@ export function subscribeNewSystemTopics() {
 }
 
 const CONFIG = {
-  clientId:    "337DJLKi2OJ4VsyFSLIt9",
-  legacyAppId: "101585",
-  redirectUri: "https://makotitraderss.vercel.app/callback",
+  clientId:    "32UpAZvxBqalqEFHVMTNS",
+  legacyAppId: "111670",
+  redirectUri: "https://neurotradepro.vercel.app/callback",
   authUrl:     "https://auth.deriv.com/oauth2/auth",
   tokenUrl:    "https://auth.deriv.com/oauth2/token",
   restBase:    "https://api.derivws.com/trading/v1",
