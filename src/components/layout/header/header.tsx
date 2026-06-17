@@ -278,7 +278,7 @@ const AppHeader = observer(({ isAuthenticating }: TAppHeaderProps) => {
                                 if (tmbEnabled) {
                                     await onRenderTMBCheck(true, undefined, false);
                                 } else {
-                                    window.location.href = generateOAuthURL(false, 'home');
+                                    await startNewLogin();
                                 }
                             } catch (error) {
                                 console.error(error);

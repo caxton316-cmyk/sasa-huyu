@@ -1,0 +1,60 @@
+fix that hardcoded redirect URI to use window.location.origin/callback dynamically, so it works in both Replit and production? then replace this Client ID
+32UpAZvxBqalqEFHVMTNS with this 33zRoZspTijCoSs1d5qio and the site should be using this client id for the system of app id remove it since the client id is the one we are supposed to use ...
+
+23 minutes ago
+
+Planning client ID replacement strategy
+Let me read the key files first to make precise edits:
+
+
+4 actions
+Let me read the NewDerivAuth.js around the config section first, then apply all changes in parallel:
+
+
+3 actions
+Now I have everything I need. Making all changes in parallel:
+
+
+5 actions
+Now let me also update the OAuth URL builder in config.ts to use client_id instead of app_id, and fix the login.ts URLs:
+
+
+3 actions
+Now updating the OAuth URLs in config.ts and login.ts to use client_id instead of app_id:
+
+
+7 actions
+Two errors to fix. Let me read the current config.ts state:
+
+
+2 actions
+Config.ts looks clean — no APP_ID reference remains. That browser error was transient (old JS in memory before the rebuild finished). Let me do a final sweep to confirm the old client ID is fully gone and no stale references remain:
+
+
+2 actions
+One stray reference in bot.js — let me fix that:
+
+
+4 actions
+All changes are complete. Here's a summary of everything that was done:
+
+✅ Changes Made
+Client ID — replaced 32UpAZvxBqalqEFHVMTNS → 33zRoZspTijCoSs1d5qio in all 5 locations:
+
+File	What changed
+src/auth/NewDerivAuth.js	New client ID + redirect URI fixed
+src/components/shared/utils/config/config.ts	Single source of truth updated
+server/index.js	Server-side token exchange updated
+server/index.ts	Server-side token exchange updated
+bot.js	Standalone bot script updated
+Redirect URI — src/auth/NewDerivAuth.js was the only hardcoded one. Now uses:
+
+redirectUri: `${window.location.origin}/callback`
+
+Works on Replit, production, and any domain automatically.
+
+App ID removed — All OAuth URLs now use client_id= instead of app_id=:
+
+generateOAuthURL() in config.ts → uses client_id
+loginUrl() in login.ts → uses client_id, always points to auth.deriv.com
+getAppId() kept for backward-compat but returns the OAUTH_CLIENT_ID value
