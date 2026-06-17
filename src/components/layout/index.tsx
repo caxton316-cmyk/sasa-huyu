@@ -13,7 +13,6 @@ import Footer from './footer';
 import AppHeader from './header';
 import Body from './main-body';
 import StandaloneLoginScreen from '@/components/login-screen/StandaloneLoginScreen';
-import { isNewLoggedIn } from '@/auth/NewDerivAuth';
 import './layout.scss';
 
 const Layout = () => {
@@ -138,9 +137,9 @@ const Layout = () => {
         // their account data is now missing — do NOT redirect fresh unauthenticated visitors
         // so they can choose their login flow from the header buttons.
         const checkOIDCEnabledWithMissingAccount =
-            isLoggedInCookie && !isEndpointPage && !isCallbackPage && !clientHasCurrency && !isNewLoggedIn();
+            isLoggedInCookie && !isEndpointPage && !isCallbackPage && !clientHasCurrency;
         const shouldAuthenticate =
-            (isLoggedInCookie && !isClientAccountsPopulated && !isEndpointPage && !isCallbackPage && !isNewLoggedIn()) ||
+            (isLoggedInCookie && !isClientAccountsPopulated && !isEndpointPage && !isCallbackPage) ||
             checkOIDCEnabledWithMissingAccount;
 
         // Create an async IIFE to handle authentication

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Cookies from 'js-cookie';
+import { generateOAuthURL } from '@/components/shared';
 import { startNewLogin, startNewSignup } from '@/auth/NewDerivAuth';
 import './LoginScreen.scss';
 
@@ -44,9 +45,9 @@ const StandaloneLoginScreen: React.FC = () => {
 
     const handleStandardLogin = useCallback(async () => {
         try {
-            await startNewLogin();
+            window.location.href = generateOAuthURL(false, 'home');
         } catch (error) {
-            console.error('[Standard Login]', error);
+            console.error(error);
         }
     }, []);
 
