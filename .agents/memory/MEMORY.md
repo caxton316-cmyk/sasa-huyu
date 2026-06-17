@@ -1,0 +1,1 @@
+- [Trade parameters dropdown race condition](trade-params-race-fix.md) — dropdowns blank on load due to MobX reaction firing before workspace exists; fix in app-store.ts onMount.

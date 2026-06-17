@@ -181,6 +181,26 @@ export default class AppStore {
         blockly_store.setContainerSize();
         blockly_store.setLoading(false);
 
+        // Fix race condition: if socket was already open before workspace loaded,
+        // the registerOnAccountSwitch reaction won't fire (MobX reactions only fire
+        // on changes). So we proactively re-populate trade parameter dropdowns here.
+        const active_symbols_init = ApiHelpers?.instance?.active_symbols;
+        const contracts_for_init = ApiHelpers?.instance?.contracts_for;
+        if (active_symbols_init && contracts_for_init && window.Blockly?.derivWorkspace) {
+            active_symbols_init.retrieveActiveSymbols(false).then(() => {
+                contracts_for_init.disposeCache();
+                window.Blockly?.derivWorkspace
+                    .getAllBlocks()
+                    .filter((block: { type: string }) => block.type === 'trade_definition_market')
+                    .forEach((block: object) => {
+                        runIrreversibleEvents(() => {
+                            const fake_create_event = new window.Blockly.Events.BlockCreate(block);
+                            window.Blockly.Events.fire(fake_create_event);
+                        });
+                    });
+            });
+        }
+
         this.registerCurrencyReaction.call(this);
         this.registerOnAccountSwitch.call(this);
         this.registerLandingCompanyChangeReaction.call(this);
