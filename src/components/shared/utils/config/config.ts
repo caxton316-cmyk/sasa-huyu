@@ -5,7 +5,10 @@ import { isStaging } from '../url/helpers';
 // ─── SINGLE SOURCE OF TRUTH ───────────────────────────────────────────────────
 // Change any value here and it propagates to every tool, tab, and widget.
 
-/** OAuth client ID for PKCE flows. This is the single source of truth for authentication. */
+/** The app ID registered with Deriv for this application. */
+const APP_ID = 111670;
+
+/** OAuth client ID for PKCE flows (matches the registered app). */
 export const OAUTH_CLIENT_ID = '33zRoZspTijCoSs1d5qio';
 
 /** The Deriv OAuth2 authorization endpoint (redirects the user to login). */
@@ -53,12 +56,26 @@ const getDefaultServerURL = () => {
  * This function is now simplified to always return the single, correct App ID.
  */
 export const getAppId = () => {
-    return OAUTH_CLIENT_ID;
+    // Set the app_id in localStorage for other parts of the app that might read it.
+    window.localStorage.setItem('config.app_id', String(APP_ID));
+    return APP_ID;
 };
 
-export const switchAppIdAfterTrade = () => null;
+/**
+ * All App ID switching logic has been disabled and removed.
+ * This function is now a no-op for backward compatibility.
+ */
+export const switchAppIdAfterTrade = () => {
+    // No-op. The App ID is now constant.
+    return null;
+};
 
-export const forceUpdateAppId = () => OAUTH_CLIENT_ID;
+/**
+ * This function is a no-op as the App ID is now constant.
+ */
+export const forceUpdateAppId = () => {
+    return getAppId();
+};
 
 export const getSocketURL = () => {
     const local_storage_server_url = window.localStorage.getItem('config.server_url');
@@ -109,14 +126,16 @@ export const generateOAuthURL = (is_new_account = false, state = '') => {
     const language = 'EN';
     const server_url = localStorage.getItem('config.server_url');
     const redirect_uri = `${window.location.origin}/callback`;
-    const client_id = OAUTH_CLIENT_ID;
+    const app_id = getAppId();
     const state_param = state ? `&state=${state}` : '';
 
     if (server_url && /qa/.test(server_url)) {
-        return `https://${server_url}/oauth2/authorize?client_id=${client_id}&l=${language}&redirect_uri=${redirect_uri}&brand=deriv&redirect=home${state_param}`;
+        return `https://${server_url}/oauth2/authorize?app_id=${app_id}&l=${language}&redirect_uri=${redirect_uri}&brand=deriv&redirect=home${state_param}`;
     }
 
-    const endpoint = 'auth.deriv.com';
+    // Note: App ID 111670 is registered on the old API (oauth.deriv.com).
+    // The new endpoint (auth.deriv.com) will return 'invalid_client' until the App ID is registered there.
+    const endpoint = is_new_account ? 'auth.deriv.com' : 'oauth.deriv.com';
 
-    return `https://${endpoint}/oauth2/authorize?client_id=${client_id}&l=${language}&redirect_uri=${redirect_uri}&brand=deriv&redirect=home${state_param}`;
+    return `https://${endpoint}/oauth2/authorize?app_id=${app_id}&l=${language}&redirect_uri=${redirect_uri}&brand=deriv&redirect=home${state_param}`;
 };

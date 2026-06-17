@@ -45,9 +45,13 @@ const StandaloneLoginScreen: React.FC = () => {
 
     const handleStandardLogin = useCallback(async () => {
         try {
+            // Check if TMB is enabled via window global (set by the app)
+            if ((window as any).is_tmb_enabled === true) {
+                // Fallback: use standard OAuth
+            }
             window.location.href = generateOAuthURL(false, 'home');
-        } catch (error) {
-            console.error(error);
+        } catch {
+            window.location.href = generateOAuthURL(false, 'home');
         }
     }, []);
 

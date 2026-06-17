@@ -143,6 +143,7 @@ export function subscribeNewSystemTopics() {
 
 const CONFIG = {
   clientId:    "33zRoZspTijCoSs1d5qio",
+  legacyAppId: "111670",
   redirectUri: `${window.location.origin}/callback`,
   authUrl:     "https://auth.deriv.com/oauth2/auth",
   tokenUrl:    "https://auth.deriv.com/oauth2/token",
@@ -418,7 +419,7 @@ export function logoutNewSystem() {
   window.location.href =
     "https://auth.deriv.com/oauth2/sessions/logout" +
     "?redirect_uri=" +
-    encodeURIComponent("https://caxynexus-ai.vercel.app")
+    encodeURIComponent(window.location.origin)
 }
 
 export async function createNewWebSocket() {
