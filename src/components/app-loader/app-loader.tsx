@@ -10,7 +10,7 @@ const AppLoader: React.FC<AppLoaderProps> = ({ onLoadingComplete }) => {
     const [show, setShow] = useState(true);
     const clangSoundRef = useRef<HTMLAudioElement | null>(null);
     const sirenSoundRef = useRef<HTMLAudioElement | null>(null);
-    const logoText = "CAXYNEXUS-AI";
+    const logoText = "DENNEXUSFX";
 
     useEffect(() => {
         // --- SOUND INITIALIZATION ---

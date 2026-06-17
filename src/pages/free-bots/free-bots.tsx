@@ -32,14 +32,14 @@ const FreeBots = observer(() => {
     const getBotDescription = (botName: string): string => {
         const descriptions: { [key: string]: string } = {
             'STARTER BOT':
-                'Official starter bot for Caxynexus-Ai. Optimized for beginners with standard risk management.',
+                'Official starter bot for DennexusFX. Optimized for beginners with standard risk management.',
             'POVERTY KILLER':
                 'High-performance digit trading bot with intelligent recovery and profit optimization.',
             'POVERTY KILLER V2.1':
                 'Updated version of the Poverty Killer bot with enhanced performance and risk management.',
             'BEST RISE FALL':
                 'Automated rise and fall strategy optimized for consistent returns in trending markets.',
-            'CAXYNEXUS-AI AUTOMATED RISE FALL':
+            'DENNEXUSFX AUTOMATED RISE FALL':
                 'Premium rise and fall strategy featuring advanced entry points and recovery mechanisms.',
             'OVER1 R32 PRO':
                 'Professional Over 1 trading bot with R32 recovery strategy. Optimized for high win rates with intelligent recovery mechanisms and risk management.',
@@ -53,10 +53,10 @@ const FreeBots = observer(() => {
                 'Professional Under 7 bot with R56 recovery mechanism. Features intelligent risk management and recovery strategies for consistent returns.',
             'UNDER8 R67 PRO':
                 'Advanced Under 8 trading bot with R67 recovery system. Designed for optimal performance with sophisticated pattern recognition and recovery.',
-            'CAXYNEXUS-AIV3RISE FALL':
+            'DENNEXUSFX V3 RISE FALL':
                 'Premium Rise/Fall trading bot with MACD analysis and intelligent recovery. Optimized for consistent returns in trending markets.',
-            'CAXYNEXUS-AI RISE/FALL V4':
-                'Latest version of the Caxynexus-Ai Rise/Fall bot. Enhanced with improved entry signals and advanced recovery management for maximum stability.',
+            'DENNEXUSFX RISE/FALL V4':
+                'Latest version of the DennexusFX Rise/Fall bot. Enhanced with improved entry signals and advanced recovery management for maximum stability.',
                         };
 
         // Try exact match first
@@ -154,8 +154,8 @@ const FreeBots = observer(() => {
 
                 // Update skeletons to our explicit list
                 const skeletonBots: BotData[] = manifest.map(item => {
-                    const botName = (item.name || item.file.replace('.xml', '')).replace(/[_-]/g, ' ').replace('CAXYNEXUS-AIRISE FALLV4', 'CAXYNEXUS-AI RISE/FALL V4');
-                    const isPremiumPlus = botName.includes('CAXYNEXUS-AI RISE/FALL V4');
+                    const botName = (item.name || item.file.replace('.xml', '')).replace(/[_-]/g, ' ').replace('DENNEXUSFXRISE FALLV4', 'DENNEXUSFX RISE/FALL V4');
+                    const isPremiumPlus = botName.includes('DENNEXUSFX RISE/FALL V4');
                     return {
                         name: botName,
                         description: getBotDescription(botName),
@@ -176,8 +176,8 @@ const FreeBots = observer(() => {
                     try {
                         const xml = await fetchXmlWithCache(item.file);
                         if (xml) {
-                            const botName = (item.name || item.file.replace('.xml', '')).replace(/[_-]/g, ' ').replace('CAXYNEXUS-AIRISE FALLV4', 'CAXYNEXUS-AI RISE/FALL V4');
-                            const isPremiumPlus = botName.includes('CAXYNEXUS-AI RISE/FALL V4');
+                            const botName = (item.name || item.file.replace('.xml', '')).replace(/[_-]/g, ' ').replace('DENNEXUSFXRISE FALLV4', 'DENNEXUSFX RISE/FALL V4');
+                            const isPremiumPlus = botName.includes('DENNEXUSFX RISE/FALL V4');
                             loadedBots.push({
                                 name: botName,
                                 description: getBotDescription(botName),
